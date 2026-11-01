@@ -1,0 +1,1260 @@
+{
+  "id": "KD2PtrGjC8vb1uyL",
+  "name": "Donanim Fiyat Takipcisi",
+  "active": true,
+  "isArchived": false,
+  "versionId": "62f93d03-6b43-43ad-aead-45fed9ef4bd9",
+  "activeVersionId": "62f93d03-6b43-43ad-aead-45fed9ef4bd9",
+  "triggerCount": 1,
+  "createdAt": "2026-10-28T11:52:38.869Z",
+  "updatedAt": "2026-10-29T14:39:38.060Z",
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "connections": {
+    "Get Active Filters": {
+      "main": [
+        [
+          {
+            "node": "Get Price History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and Apply Filters": {
+      "main": [
+        [
+          {
+            "node": "Compare and Detect Drops",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Debug Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare and Detect Drops": {
+      "main": [
+        [
+          {
+            "node": "Update Price History",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check If Drop Detected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Price History": {
+      "main": [
+        [
+          {
+            "node": "Generate Scrape Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Scrape Targets": {
+      "main": [
+        [
+          {
+            "node": "Fetch Target Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Target Page": {
+      "main": [
+        [
+          {
+            "node": "Parse and Apply Filters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test": {
+      "main": [
+        [
+          {
+            "node": "Get Debug Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Debug Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Debug Config": {
+      "main": [
+        [
+          {
+            "node": "Get Active Filters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Debug Messages": {
+      "main": [
+        [
+          {
+            "node": "Send Debug Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Drop Detected": {
+      "main": [
+        [
+          {
+            "node": "Format Notification Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Notification Items": {
+      "main": [
+        [
+          {
+            "node": "Is DM Notification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is DM Notification?": {
+      "main": [
+        [
+          {
+            "node": "Open Discord DM Channel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Discord Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Open Discord DM Channel": {
+      "main": [
+        [
+          {
+            "node": "Send Discord DM Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "3d721297-4acb-4b8c-9417-f340bf6a1bd0",
+      "name": "Manual Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "qY8ZHyILWEQvZ1Mk"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "is_active",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "ce006c05-5143-4de2-91ad-7044a50a13d0",
+      "name": "Get Active Filters",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawFilters = $('Get Active Filters').all().map(i => i.json);\nconst activeFilters = rawFilters.filter(f => f.is_active === true);\n\nconst targets = $('Generate Scrape Targets').all();\nconst responses = $('Fetch Target Page').all();\n\nconst allProducts = [];\n\nfor (let idx = 0; idx < responses.length; idx++) {\n  const target = targets[idx]?.json || {};\n  const html = responses[idx]?.json?.data || responses[idx]?.json?.body || '';\n  if (typeof html !== 'string' || html.length === 0) continue;\n\n  try {\n// 1. GamingGen\n    if (target.site === 'gaming_gen_tr') {\n      const sections = html.split(/<li[^>]*class=\"[^\"]*product type-product/);\n      for (let i = 1; i < sections.length; i++) {\n        const section = sections[i];\n        const inStock = !section.includes('outofstock');\n        \n        const urlMatch = section.match(/href=\"([^\"]+)\"/);\n        const titleMatch = section.match(/<h2[^>]*class=\"[^\"]*woocommerce-loop-product__title[^\"]*\"[^>]*>([^<]+)<\\/h2>/);\n        const priceMatch = section.match(/<ins[^>]*>[\\s\\S]*?<bdi>([\\d\\.,]+)&nbsp;<span class=\"woocommerce-Price-currencySymbol\"[^>]*>/i) ||\n                           section.match(/<span class=\"woocommerce-Price-amount amount\">[\\s\\S]*?<bdi>([\\d\\.,]+)&nbsp;<span class=\"woocommerce-Price-currencySymbol\"[^>]*>/i);\n        const idMatch = section.match(/post-(\\d+)/);\n\n        if (urlMatch && titleMatch && priceMatch) {\n          const url = urlMatch[1];\n          let rawTitle = titleMatch[1].trim();\n          const price = parseFloat(priceMatch[1].replace(/\\./g, '').replace(',', '.'));\n          const id = idMatch ? idMatch[1] : url.split('/').filter(Boolean).pop();\n          const pid = 'gaming_gen_' + id;\n\n          // Extract specs from list if present\n          const specs = [...section.matchAll(/<span class=\"model\">([^<]+)<\\/span>/g)].map(m => m[1].trim());\n          if (specs.length > 0) {\n            rawTitle += ' (' + specs.join(' / ') + ')';\n          }\n          rawTitle = rawTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n\n          if (!allProducts.some(x => x.product_id === pid)) {\n            allProducts.push({\n              product_id: pid,\n              source_site: 'gaming_gen_tr',\n              product_name: rawTitle,\n              product_url: url,\n              current_price: price,\n              previous_price: price,\n              in_stock: inStock\n            });\n          }\n        }\n      }\n    }\n\n    // 2. GameGaraj\n    else if (target.site === 'gamegaraj') {\n      const cards = html.split(/<div class=\"w-full p-6 hover:scale-105/);\n      for (let i = 1; i < cards.length; i++) {\n        const card = cards[i];\n        const linkMatch = card.match(/href=\"(\\/(?:oem-paketler|urun)\\/([a-zA-Z0-9_\\-]+)\\/?)\"/);\n        const titleMatch = card.match(/title=\"([^\"]+)\"/);\n        const priceMatch = card.match(/>([\\d\\.,]+)\\s*TL<\\/p>/i);\n\n        if (linkMatch && titleMatch && priceMatch) {\n          const url = 'https://www.gamegaraj.com' + linkMatch[1];\n          const slug = linkMatch[2];\n          const rawTitle = titleMatch[1].trim();\n          const price = parseFloat(priceMatch[1].replace(/\\./g, '').replace(',', '.'));\n          const inStock = !card.includes('Tükendi') && !card.includes('Stokta Yok');\n\n          const cpu = (card.match(/İşlemci:\\s*([^<]+)/)?.[1] || '').trim();\n          const gpu = (card.match(/Ekran Kartı:\\s*([^<]+)/)?.[1] || '').trim();\n          const ram = (card.match(/RAM:\\s*([^<]+)/)?.[1] || '').trim();\n          const ssd = (card.match(/SSD:\\s*([^<]+)/)?.[1] || '').trim();\n\n          const specParts = [cpu, gpu, ram, ssd].filter(Boolean);\n          let fullTitle = rawTitle;\n          if (specParts.length > 0) fullTitle += ' (' + specParts.join(' / ') + ')';\n          fullTitle = fullTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n          const pid = 'gamegaraj_' + slug;\n\n          if (!allProducts.some(x => x.product_id === pid)) {\n            allProducts.push({\n              product_id: pid,\n              source_site: 'gamegaraj',\n              product_name: fullTitle,\n              product_url: url,\n              current_price: price,\n              previous_price: price,\n              in_stock: inStock\n            });\n          }\n        }\n      }\n    }\n\n    // 3. Itopya\n    else if (target.site === 'itopya') {\n      const cards = html.split(/<div class=\"product\"/);\n      for (let i = 1; i < cards.length; i++) {\n        const card = cards[i];\n        const linkMatch = card.match(/href=\"(\\/(?:[^\"]+)_h(\\d+))\"/);\n        const titleMatch = card.match(/<h2[^>]*class=\"eseoContainer\"[^>]*>([^<]+)<\\/h2>/i) ||\n                           card.match(/alt=\"([^\"]+)\"/i);\n        const priceMatch = card.match(/class=\"product-price\"[\\s\\S]*?<strong>([\\d\\.,]+)\\s*<abbr/i);\n\n        if (linkMatch && titleMatch && priceMatch) {\n          const url = 'https://www.itopya.com' + linkMatch[1];\n          const id = linkMatch[2];\n          let rawTitle = titleMatch[1].trim();\n          const price = parseFloat(priceMatch[1].replace(/\\./g, '').replace(',', '.'));\n          const inStock = !card.includes('Tükendi') && !card.includes('Stokta Yok');\n\n          rawTitle = rawTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n          const pid = 'itopya_' + id;\n\n          if (!allProducts.some(x => x.product_id === pid)) {\n            allProducts.push({\n              product_id: pid,\n              source_site: 'itopya',\n              product_name: rawTitle,\n              product_url: url,\n              current_price: price,\n              previous_price: price,\n              in_stock: inStock\n            });\n          }\n        }\n      }\n    }\n\n    // 4. PcKolik\n    else if (target.site === 'pckolik') {\n      let systems = [];\n\n      // Primary: Next.js embedded JSON payload (systems array)\n      const escIdx = html.indexOf('\\\\\"systems\\\\\":[');\n      const plainIdx = html.indexOf('\"systems\":[');\n      const isEscaped = escIdx !== -1;\n      const startIdx = isEscaped ? escIdx + '\\\\\"systems\\\\\":'.length : (plainIdx !== -1 ? plainIdx + '\"systems\":'.length : -1);\n\n      if (startIdx !== -1) {\n        let bracketCount = 0;\n        let started = false;\n        let endIdx = -1;\n        for (let i = startIdx; i < html.length; i++) {\n          if (html[i] === '[') {\n            bracketCount++;\n            started = true;\n          } else if (html[i] === ']') {\n            bracketCount--;\n            if (started && bracketCount === 0) {\n              endIdx = i;\n              break;\n            }\n          }\n        }\n\n        if (endIdx !== -1) {\n          const rawSlice = html.slice(startIdx, endIdx + 1);\n          const jsonStr = isEscaped ? rawSlice.replace(/\\\\\"/g, '\"').replace(/\\\\\\\\/g, '\\\\') : rawSlice;\n          try {\n            systems = JSON.parse(jsonStr);\n          } catch (e) {\n            console.error('Failed to parse PcKolik systems JSON:', e.message);\n          }\n        }\n      }\n\n      if (Array.isArray(systems) && systems.length > 0) {\n        for (const item of systems) {\n          if (!item.id || !item.name) continue;\n\n          const pid = 'pckolik_' + item.id;\n          const url = 'https://pckolik.com.tr/hazir-sistem/' + (item.slug || item.id);\n          const price = Number(item.price) || 0;\n          const inStock = Boolean(item.inStock);\n\n          const specs = Array.isArray(item.specs) ? item.specs : [];\n          const cpu = specs.find(s => s.icon === 'cpu')?.label || item.facetler?.cpuSeri || '';\n          const gpu = specs.find(s => s.icon === 'gpu')?.label || item.facetler?.gpuModel || '';\n          const ram = specs.find(s => s.icon === 'ram')?.label || item.facetler?.ramTipi || '';\n          const ssd = specs.find(s => s.icon === 'ssd')?.label || '';\n\n          const specParts = [cpu, gpu, ram, ssd].filter(Boolean);\n          let fullTitle = item.name;\n          if (specParts.length > 0) {\n            fullTitle += ' (' + specParts.join(' / ') + ')';\n          }\n          fullTitle = fullTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n\n          if (!allProducts.some(x => x.product_id === pid)) {\n            allProducts.push({\n              product_id: pid,\n              source_site: 'pckolik',\n              product_name: fullTitle,\n              product_url: url,\n              current_price: price,\n              previous_price: price,\n              in_stock: inStock\n            });\n          }\n        }\n      } else {\n        // Fallback: strictly bounded card containers (prevents attribute bleed across cards)\n        const cardChunks = html.split(/<div class=\"[^\"]*rounded-xl border border-line[^\"]*\">/);\n        for (let i = 1; i < cardChunks.length; i++) {\n          const chunk = cardChunks[i];\n          const urlMatch = chunk.match(/href=\"(\\/hazir-sistem\\/[^\"]+--([a-zA-Z0-9]+))\"/);\n          const titleMatch = chunk.match(/<h3[^>]*>([^<]+)<\\/h3>/);\n          const priceMatch = chunk.match(/class=\"price-now[^\"]*\"[^>]*>([\\d\\.,]+)/);\n\n          if (urlMatch && titleMatch && priceMatch) {\n            const url = 'https://pckolik.com.tr' + urlMatch[1];\n            const id = urlMatch[2];\n            const rawTitle = titleMatch[1].trim();\n            const price = parseFloat(priceMatch[1].replace(/\\./g, '').replace(',', '.'));\n            const inStock = !chunk.includes('Tükendi') && !chunk.includes('Stokta Yok');\n            const pid = 'pckolik_' + id;\n\n            if (!allProducts.some(x => x.product_id === pid)) {\n              allProducts.push({\n                product_id: pid,\n                source_site: 'pckolik',\n                product_name: rawTitle,\n                product_url: url,\n                current_price: price,\n                previous_price: price,\n                in_stock: inStock\n              });\n            }\n          }\n        }\n      }\n    }\n\n    // 5. Vatan Bilgisayar\n    else if (target.site === 'vatan') {\n      const regex = /<div class=\"product-list__content\">[\\s\\S]*?<a[^>]*href=\"([^\"]+)\"[\\s\\S]*?<h3>([^<]+)<\\/h3>[\\s\\S]*?class=\"product-list__price\">([\\d\\.,]+)/g;\n      let m;\n      while ((m = regex.exec(html)) !== null) {\n        const url = m[1].startsWith('http') ? m[1] : ('https://www.vatanbilgisayar.com' + m[1]);\n        const rawTitle = m[2].trim();\n        const price = parseFloat(m[3].replace(/\\./g, '').replace(',', '.'));\n        const id = url.split('/').pop().replace('.html', '');\n        const block = html.slice(m.index, m.index + 1200);\n        const inStock = !block.includes('Tükendi') && !block.includes('Stokta Yok');\n        const pid = 'vatan_' + id;\n\n        if (!allProducts.some(x => x.product_id === pid)) {\n          allProducts.push({\n            product_id: pid,\n            source_site: 'vatan',\n            product_name: rawTitle,\n            product_url: url,\n            current_price: price,\n            previous_price: price,\n            in_stock: inStock\n          });\n        }\n      }\n    }\n\n    // 6. MediaMarkt\n    else if (target.site === 'mediamarkt') {\n      const ldMatches = html.match(/<script[^>]*type=\"application\\/ld\\+json\"[^>]*>([\\s\\S]*?)<\\/script>/gi) || [];\n      for (const scriptTag of ldMatches) {\n        const jsonText = scriptTag.replace(/<script[^>]*>/, '').replace(/<\\/script>/, '');\n        try {\n          const data = JSON.parse(jsonText);\n          if (data['@type'] === 'ItemList' && Array.isArray(data.itemListElement)) {\n            for (const li of data.itemListElement) {\n              const item = li.item;\n              if (!item || !item.name || !item.url) continue;\n              let rawTitle = item.name.trim();\n              rawTitle = rawTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n              const price = Number(item.offers?.price) || 0;\n              const url = item.url;\n              const id = url.split('-').pop().replace('.html', '');\n              const pid = 'mediamarkt_' + id;\n\n              if (!allProducts.some(x => x.product_id === pid)) {\n                allProducts.push({\n                  product_id: pid,\n                  source_site: 'mediamarkt',\n                  product_name: rawTitle,\n                  product_url: url,\n                  current_price: price,\n                  previous_price: price,\n                  in_stock: true\n                });\n              }\n            }\n          }\n        } catch (e) {}\n      }\n    }\n  } catch (err) {\n    console.error(`Error parsing site ${target.site} page ${target.page}:`, err.message);\n  }\n}\n\n// Helper: check if product matches filter\nfunction matchesFilter(product, filter) {\n  const name = product.product_name.toLowerCase();\n  \n  if (filter.source_site && filter.source_site !== 'all' && filter.source_site !== product.source_site) {\n    return false;\n  }\n  \n  if (filter.min_price && product.current_price < filter.min_price) return false;\n  if (filter.max_price && product.current_price > filter.max_price) return false;\n  \n  // Exclude keywords\n  if (filter.exclude_keywords) {\n    const excludes = filter.exclude_keywords.split(/[,+]/).map(s => s.trim().toLowerCase()).filter(Boolean);\n    for (const ex of excludes) {\n      if (name.includes(ex)) return false;\n    }\n  }\n  \n  // Include keywords: ALL specified keywords must match (AND logic)\n  if (filter.include_keywords) {\n    let includes = [];\n    if (filter.include_keywords.includes(',')) {\n      includes = filter.include_keywords.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);\n    } else if (filter.include_keywords.includes('+')) {\n      includes = filter.include_keywords.split('+').map(s => s.trim().toLowerCase()).filter(Boolean);\n    } else {\n      includes = filter.include_keywords.split(/\\s+/).map(s => s.trim().toLowerCase()).filter(Boolean);\n    }\n    \n    const includesTi = includes.some(k => /\\bti\\b/i.test(k));\n    const includesSuper = includes.some(k => /\\bsuper\\b/i.test(k));\n    const includesXt = includes.some(k => /\\bxt\\b/i.test(k));\n    \n    for (const inc of includes) {\n      const isModelNumber = /^\\d{4}$/.test(inc);\n      let pattern;\n      if (isModelNumber) {\n        const forbidden = [];\n        if (!includesTi) forbidden.push('ti');\n        if (!includesSuper) forbidden.push('super');\n        if (!includesXt) forbidden.push('xt');\n        \n        if (forbidden.length > 0) {\n          pattern = new RegExp('\\\\b' + inc + '\\\\b(?!\\\\s*(?:' + forbidden.join('|') + '))', 'i');\n        } else {\n          pattern = new RegExp('\\\\b' + inc + '\\\\b', 'i');\n        }\n      } else {\n        const procMatch = inc.match(/^(\\d{4,5})([a-zA-Z]+)$/);\n        if (procMatch) {\n          pattern = new RegExp('\\\\b' + procMatch[1] + '\\\\s*' + procMatch[2] + '\\\\b', 'i');\n        } else {\n          pattern = new RegExp('\\\\b' + inc.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '\\\\b', 'i');\n        }\n      }\n      \n      if (!pattern.test(name)) return false;\n    }\n  }\n  \n  return true;\n}\n\n// Tag products with all matching filters\nconst outputItems = [];\nfor (const product of allProducts) {\n  const matchedFilters = [];\n  for (const filter of activeFilters) {\n    if (matchesFilter(product, filter)) {\n      matchedFilters.push({\n        id: filter.id,\n        drop_threshold_percent: filter.drop_threshold_percent || 5,\n        notify_dm: Boolean(filter.notify_dm || false),\n        discord_user_id: String(filter.discord_user_id || '')\n      });\n    }\n  }\n  \n  outputItems.push({\n    ...product,\n    matched_filters: matchedFilters,\n    is_filter_matched: matchedFilters.length > 0,\n    drop_threshold_percent: matchedFilters.length > 0 ? Math.min(...matchedFilters.map(f => f.drop_threshold_percent)) : 5\n  });\n}\n\nreturn outputItems.map(item => ({ json: item }));",
+        "language": "javaScript"
+      },
+      "id": "256f507d-3754-47d7-89d5-a52756238c97",
+      "name": "Parse and Apply Filters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "MZ5jUhvyTbqRUOdk"
+        },
+        "returnAll": true
+      },
+      "id": "1f6194b2-14f0-4637-a1ca-16d95d537d79",
+      "name": "Get Price History",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        96
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const historyRows = $('Get Price History').all().map(i => i.json);\nconst historyMap = new Map();\nfor (const row of historyRows) {\n  if (row.product_id) {\n    historyMap.set(row.product_id, row);\n  }\n}\n\nconst siteLabels = {\n  gaming_gen_tr: 'Gaming.gen.tr',\n  gamegaraj: 'GameGaraj',\n  itopya: 'İtopya',\n  pckolik: 'PcKolik',\n  vatan: 'Vatan Bilgisayar',\n  mediamarkt: 'MediaMarkt'\n};\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const p = item.json;\n  const history = historyMap.get(p.product_id);\n  \n  let previousPrice = p.previous_price || p.current_price;\n  let dropPercent = 0;\n  const notifications = [];\n  \n  if (history && history.current_price) {\n    previousPrice = history.current_price;\n\n    // Safety check 1: if base product name changed completely, the old row was mismatched or repurposed. Baseline it!\n    const oldBase = (history.product_name || '').split('(')[0].trim().toLowerCase();\n    const newBase = (p.product_name || '').split('(')[0].trim().toLowerCase();\n    if (oldBase && newBase && !oldBase.includes(newBase) && !newBase.includes(oldBase)) {\n      previousPrice = p.current_price;\n    }\n\n    // Safety check 2: baseline any PcKolik records saved prior to 2026-10-29 13:40 UTC to prevent false discounts from corrupted regex history\n    if (p.source_site === 'pckolik') {\n      const rowTime = history.last_checked_at ? new Date(history.last_checked_at).getTime() : 0;\n      if (rowTime < 1793281500000) {\n        previousPrice = p.current_price;\n      }\n    }\n\n    if (p.current_price < previousPrice) {\n      dropPercent = ((previousPrice - p.current_price) / previousPrice) * 100;\n      \n      // Per AGENTS.md: Stokta olmayan ürünü indirim sayma.\n      if (p.in_stock && p.matched_filters && p.matched_filters.length > 0) {\n        for (const mf of p.matched_filters) {\n          if (dropPercent >= mf.drop_threshold_percent) {\n            const isDm = Boolean(mf.notify_dm && mf.discord_user_id);\n            const safeTitle = p.product_name.length > 230 ? p.product_name.slice(0, 227) + '...' : p.product_name;\n            const embed = {\n              title: '🔥 FİYAT DÜŞÜŞÜ: ' + safeTitle,\n              url: p.product_url,\n              color: 3066993,\n              fields: [\n                {\n                  name: '🏢 Kaynak Site',\n                  value: siteLabels[p.source_site] || p.source_site,\n                  inline: true\n                },\n                {\n                  name: '📉 İndirim Oranı',\n                  value: '%' + dropPercent.toFixed(1) + ' Düşüş',\n                  inline: true\n                },\n                {\n                  name: '📦 Stok Durumu',\n                  value: p.in_stock ? 'Stokta Var ✅' : 'Tükendi ❌',\n                  inline: true\n                },\n                {\n                  name: '💰 Eski Fiyat',\n                  value: previousPrice.toLocaleString('tr-TR') + ' ₺',\n                  inline: true\n                },\n                {\n                  name: '🏷️ Yeni Fiyat',\n                  value: '**' + p.current_price.toLocaleString('tr-TR') + ' ₺**',\n                  inline: true\n                }\n              ],\n              footer: {\n                text: 'n8n Fiyat Takip Sistemi • ' + (isDm ? 'Özel Bildirim (DM)' : 'Kanal Bildirimi')\n              },\n              timestamp: new Date().toISOString()\n            };\n            \n            notifications.push({\n              is_dm: isDm,\n              discord_user_id: mf.discord_user_id || '',\n              target_channel_id: isDm ? null : 'YOUR_DISCORD_NOTIFICATION_CHANNEL_ID',\n              discordPayload: { embeds: [embed] }\n            });\n          }\n        }\n      }\n    }\n  }\n  \n  results.push({\n    json: {\n      product_id: p.product_id,\n      source_site: p.source_site,\n      product_name: p.product_name,\n      product_url: p.product_url,\n      current_price: p.current_price,\n      previous_price: previousPrice,\n      in_stock: p.in_stock,\n      shouldNotify: notifications.length > 0,\n      notifications: notifications\n    }\n  });\n}\n\nreturn results;",
+        "language": "javaScript"
+      },
+      "id": "f74d22c1-e653-47ba-9f55-c306e75375c5",
+      "name": "Compare and Detect Drops",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "MZ5jUhvyTbqRUOdk"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "product_id",
+              "keyValue": "={{ $json.product_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "product_id": "={{ $json.product_id }}",
+            "source_site": "={{ $json.source_site }}",
+            "product_name": "={{ $json.product_name }}",
+            "product_url": "={{ $json.product_url }}",
+            "current_price": "={{ $json.current_price }}",
+            "previous_price": "={{ $json.previous_price }}",
+            "in_stock": "={{ $json.in_stock }}",
+            "last_checked_at": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "5c11be4c-2a91-4ec0-ab07-97c375846a1e",
+      "name": "Update Price History",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "338d75ef-9ae1-45ae-8750-9bea362c6e6c",
+      "name": "Hourly Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.shouldNotify }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c9988041-bc53-4746-9a9e-f65369b1e54c",
+      "name": "Check If Drop Detected",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/v10/channels/YOUR_DISCORD_NOTIFICATION_CHANNEL_ID/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.discordPayload) }}",
+        "options": {}
+      },
+      "id": "79dcf501-26b8-4561-912f-f60043b2da57",
+      "name": "Send Discord Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        192
+      ]
+    },
+    {
+      "id": "ca6dc88a-70c6-4d7d-ac2c-f0d38bc30752",
+      "name": "Generate Scrape Targets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "jsCode": "const targets = [];\n\n// 1. GamingGen (13 pages)\nfor (let p = 1; p <= 13; p++) {\n  targets.push({\n    site: 'gaming_gen_tr',\n    page: p,\n    url: p === 1 ? 'https://www.gaming.gen.tr/kategori/hazir-sistemler/' : 'https://www.gaming.gen.tr/kategori/hazir-sistemler/page/' + p + '/'\n  });\n}\n\n// 2. GameGaraj (4 pages)\nfor (let p = 1; p <= 4; p++) {\n  targets.push({\n    site: 'gamegaraj',\n    page: p,\n    url: p === 1 ? 'https://www.gamegaraj.com/oem-paketler/' : 'https://www.gamegaraj.com/oem-paketler/?page=' + p\n  });\n}\n\n// 3. Itopya (pg=40 pulls all 789 products in one efficient request)\ntargets.push({\n  site: 'itopya',\n  page: 1,\n  url: 'https://www.itopya.com/oem-paketler/?pg=40'\n});\n\n// 4. PcKolik (Next.js payload contains all ready systems on initial page)\ntargets.push({\n  site: 'pckolik',\n  page: 1,\n  url: 'https://pckolik.com.tr/hazir-sistem'\n});\n\n// 5. Vatan Bilgisayar (10 pages)\nfor (let p = 1; p <= 10; p++) {\n  targets.push({\n    site: 'vatan',\n    page: p,\n    url: p === 1 ? 'https://www.vatanbilgisayar.com/oem-paketler' : 'https://www.vatanbilgisayar.com/oem-paketler?page=' + p\n  });\n}\n\n// 6. MediaMarkt (3 pages)\nfor (let p = 1; p <= 3; p++) {\n  targets.push({\n    site: 'mediamarkt',\n    page: p,\n    url: p === 1 ? 'https://www.mediamarkt.com.tr/tr/category/oem-hazir-sistemler-860020.html' : 'https://www.mediamarkt.com.tr/tr/category/oem-hazir-sistemler-860020.html?page=' + p\n  });\n}\n\nreturn targets.map(t => ({ json: t }));",
+        "language": "javaScript"
+      }
+    },
+    {
+      "id": "63cc3e8a-bbd8-440b-8014-4a5ca96e535e",
+      "name": "Fetch Target Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        96
+      ],
+      "parameters": {
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        },
+        "sendHeaders": true,
+        "url": "={{ $json.url }}"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "115cf3cf-3a35-45de-b7bd-8b9a0cabeae8",
+      "name": "Get Debug Config",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        150,
+        96
+      ],
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "wru3e3nz0vOoJC2v"
+        },
+        "operation": "get",
+        "options": {},
+        "returnAll": true
+      }
+    },
+    {
+      "id": "65a1461b-804e-4069-a0e2-0b2ec72cdfac",
+      "name": "Prepare Debug Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const debugConfigs = $('Get Debug Config').all().map(i => i.json);\nconst debugConfig = debugConfigs[0] || {};\n\nif (!debugConfig.is_active || !debugConfig.channel_id) {\n  return [];\n}\n\nconst targetChannelId = String(debugConfig.channel_id).trim();\nconst verbose = Boolean(debugConfig.verbose);\n\nconst targets = $('Generate Scrape Targets').all();\nconst responses = $('Fetch Target Page').all();\nconst allProducts = $input.all().map(i => i.json);\n\n// Scrape Statistics per site\nconst siteStats = {\n  gaming_gen_tr: { name: 'Gaming.gen.tr', totalPages: 13, successPages: 0, failPages: [], productCount: 0 },\n  gamegaraj: { name: 'GameGaraj', totalPages: 4, successPages: 0, failPages: [], productCount: 0 },\n  itopya: { name: 'İtopya', totalPages: 1, successPages: 0, failPages: [], productCount: 0 },\n  pckolik: { name: 'PcKolik', totalPages: 1, successPages: 0, failPages: [], productCount: 0 },\n  vatan: { name: 'Vatan Bilgisayar', totalPages: 10, successPages: 0, failPages: [], productCount: 0 },\n  mediamarkt: { name: 'MediaMarkt', totalPages: 3, successPages: 0, failPages: [], productCount: 0 }\n};\n\nfor (let idx = 0; idx < targets.length; idx++) {\n  const target = targets[idx]?.json || {};\n  const resp = responses[idx]?.json || {};\n  const html = resp.data || resp.body || '';\n  const siteKey = target.site;\n  \n  if (!siteStats[siteKey]) continue;\n  \n  if (typeof html === 'string' && html.length > 500) {\n    siteStats[siteKey].successPages++;\n  } else {\n    siteStats[siteKey].failPages.push(target.page || idx + 1);\n  }\n}\n\n// Calculate product counts per site\nfor (const p of allProducts) {\n  if (p.source_site && siteStats[p.source_site]) {\n    siteStats[p.source_site].productCount++;\n  }\n}\n\nlet totalSuccessPages = 0;\nlet totalTargets = targets.length;\nlet statusLines = [];\n\nfor (const [key, st] of Object.entries(siteStats)) {\n  totalSuccessPages += st.successPages;\n  if (st.successPages === 0) {\n    statusLines.push('• **' + st.name + ':** tarama başarısız ❌');\n  } else if (st.failPages.length > 0) {\n    statusLines.push('• **' + st.name + ':** Taranan sayfalar: ' + st.successPages + '/' + st.totalPages + ' (' + st.productCount + ' sistem) - ' + st.failPages.length + ' sayfa başarısız ⚠️');\n  } else {\n    statusLines.push('• **' + st.name + ':** Taranan sayfalar: ' + st.totalPages + ' (' + st.productCount + ' sistem) ✅');\n  }\n}\n\nconst siteStatusHeader = '📋 **Site Tarama Durumları:**\\n' + statusLines.join('\\n');\nconst overallSuccess = totalSuccessPages === totalTargets;\nconst outputMessages = [];\n\nif (!verbose) {\n  // Non-verbose: site statuses at the top + general summary\n  const summaryDesc = siteStatusHeader + '\\n\\n' +\n    '📊 **Genel Durum:**\\n' +\n    '• **Başarılı Sayfa:** **' + totalSuccessPages + ' / ' + totalTargets + '**\\n' +\n    '• **Toplam Sistem:** **' + allProducts.length + ' adet**\\n' +\n    '• **Sonuç:** ' + (overallSuccess ? 'Tüm siteler başarıyla çekildi ✅' : 'Bazı sayfalarda sorun oluştu ⚠️') + '\\n' +\n    '• **Tarama Saati:** <t:' + Math.floor(Date.now() / 1000) + ':T>';\n\n  const summaryEmbed = {\n    title: '🛠️ Donanım Siteleri Tarama Raporu (Debug)',\n    color: overallSuccess ? 3066993 : 15158332,\n    description: summaryDesc,\n    footer: {\n      text: 'n8n Fiyat Takip Debug • Verbose: Kapalı'\n    },\n    timestamp: new Date().toISOString()\n  };\n\n  outputMessages.push({\n    channel_id: targetChannelId,\n    discordPayload: { embeds: [summaryEmbed] }\n  });\n} else {\n  // Verbose: site statuses at the top + top 10 systems + pagination buttons\n  const sortedProducts = [...allProducts]\n    .filter(p => p.current_price && p.in_stock !== false)\n    .sort((a, b) => a.current_price - b.current_price);\n    \n  const pageSize = 10;\n  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / pageSize));\n  const currentPage = 1;\n  const pageItems = sortedProducts.slice(0, pageSize);\n  \n  const siteLabels = {\n    gaming_gen_tr: 'Gaming.gen.tr',\n    gamegaraj: 'GameGaraj',\n    itopya: 'İtopya',\n    pckolik: 'PcKolik',\n    vatan: 'Vatan Bilgisayar',\n    mediamarkt: 'MediaMarkt'\n  };\n  \n  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };\n  let productText = '';\n  for (let i = 0; i < pageItems.length; i++) {\n    const p = pageItems[i];\n    const rank = i + 1;\n    const badge = medals[rank] || ('`#' + rank + '`');\n    const siteName = siteLabels[p.source_site] || p.source_site;\n    const priceStr = Number(p.current_price).toLocaleString('tr-TR') + ' ₺';\n    productText += badge + ' **[' + p.product_name + '](' + p.product_url + ')**\\n';\n    productText += '   └ 💰 **' + priceStr + '** | 🏢 ' + siteName + '\\n\\n';\n  }\n  \n  const verboseComponents = totalPages > 1 ? [\n    {\n      type: 1,\n      components: [\n        {\n          type: 2,\n          style: 2,\n          label: '◀️ Önceki',\n          custom_id: 'dbg_p:0',\n          disabled: true\n        },\n        {\n          type: 2,\n          style: 2,\n          label: 'Sayfa 1 / ' + totalPages,\n          custom_id: 'dbg_cur:1',\n          disabled: true\n        },\n        {\n          type: 2,\n          style: 1,\n          label: 'Sonraki ▶️',\n          custom_id: 'dbg_p:2',\n          disabled: totalPages <= 1\n        }\n      ]\n    }\n  ] : [];\n  \n  const fullVerboseDesc = siteStatusHeader + '\\n\\n' +\n    '━━━━━━━━━━━━━━━━━━━━━━━━━━\\n' +\n    '📦 **Taranan En Ucuz Sistemler (Sayfa 1 / ' + totalPages + '):**\\n\\n' +\n    productText;\n    \n  const verboseEmbed = {\n    title: '🛠️ Donanım Siteleri Tarama Raporu (Debug Verbose)',\n    color: 10181046,\n    description: fullVerboseDesc.trim(),\n    footer: {\n      text: 'Sayfa 1 / ' + totalPages + ' • Toplam ' + sortedProducts.length + ' sistem çekildi'\n    },\n    timestamp: new Date().toISOString()\n  };\n  \n  outputMessages.push({\n    channel_id: targetChannelId,\n    discordPayload: {\n      embeds: [verboseEmbed],\n      components: verboseComponents\n    }\n  });\n}\n\nreturn outputMessages.map(m => ({ json: m }));",
+        "language": "javaScript"
+      }
+    },
+    {
+      "id": "f3d600f7-fd40-40dc-b395-54b9700673df",
+      "name": "Send Debug Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1650,
+        300
+      ],
+      "parameters": {
+        "body": "={{ JSON.stringify($json.discordPayload) }}",
+        "contentType": "raw",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "method": "POST",
+        "options": {},
+        "rawContentType": "application/json",
+        "sendBody": true,
+        "sendHeaders": true,
+        "url": "=https://discord.com/api/v10/channels/{{ $json.channel_id }}/messages"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "febe61d0-e2f0-4ac6-9808-7ed72cd2ae6e",
+      "name": "Format Notification Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1850,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst flatNotifs = [];\nconst seen = new Set();\n\nfor (const item of allItems) {\n  const notifs = item.json.notifications || [];\n  for (const n of notifs) {\n    const key = (n.is_dm ? ('dm_' + n.discord_user_id) : ('ch_' + n.target_channel_id)) + '_' + item.json.product_id;\n    if (!seen.has(key)) {\n      seen.add(key);\n      flatNotifs.push({\n        json: {\n          ...n,\n          product_id: item.json.product_id\n        }\n      });\n    }\n  }\n}\n\nreturn flatNotifs;\n",
+        "language": "javaScript"
+      }
+    },
+    {
+      "id": "e1d9186d-4131-4f9c-9896-1aa98742078e",
+      "name": "Is DM Notification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2050,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_dm }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "a3591cfd-bf59-4be2-8bad-acd8820e6a55",
+      "name": "Open Discord DM Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2300,
+        180
+      ],
+      "parameters": {
+        "body": "={{ JSON.stringify({ recipient_id: $json.discord_user_id }) }}",
+        "contentType": "raw",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "method": "POST",
+        "options": {},
+        "rawContentType": "application/json",
+        "sendBody": true,
+        "sendHeaders": true,
+        "url": "https://discord.com/api/v10/users/@me/channels"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "b736ec59-2bc2-43bb-9a66-8991c5862aaa",
+      "name": "Send Discord DM Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2550,
+        180
+      ],
+      "parameters": {
+        "body": "={{ JSON.stringify($('Format Notification Items').item.json.discordPayload) }}",
+        "contentType": "raw",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "method": "POST",
+        "options": {},
+        "rawContentType": "application/json",
+        "sendBody": true,
+        "sendHeaders": true,
+        "url": "=https://discord.com/api/v10/channels/{{ $json.id }}/messages"
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "nodeGroups": [],
+  "activeVersion": {
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "3d721297-4acb-4b8c-9417-f340bf6a1bd0",
+        "name": "Manual Test",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "qY8ZHyILWEQvZ1Mk"
+          },
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "is_active",
+                "condition": "isTrue"
+              }
+            ]
+          },
+          "returnAll": true
+        },
+        "id": "ce006c05-5143-4de2-91ad-7044a50a13d0",
+        "name": "Get Active Filters",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          224,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const rawFilters = $('Get Active Filters').all().map(i => i.json);\nconst activeFilters = rawFilters.filter(f => f.is_active === true);\n\nconst targets = $('Generate Scrape Targets').all();\nconst responses = $('Fetch Target Page').all();\n\nconst allProducts = [];\n\nfor (let idx = 0; idx < responses.length; idx++) {\n  const target = targets[idx]?.json || {};\n  const html = responses[idx]?.json?.data || responses[idx]?.json?.body || '';\n  if (typeof html !== 'string' || html.length === 0) continue;\n\n  try {\n// 1. GamingGen\n    if (target.site === 'gaming_gen_tr') {\n      const sections = html.split(/<li[^>]*class=\"[^\"]*product type-product/);\n      for (let i = 1; i < sections.length; i++) {\n        const section = sections[i];\n        const inStock = !section.includes('outofstock');\n        \n        const urlMatch = section.match(/href=\"([^\"]+)\"/);\n        const titleMatch = section.match(/<h2[^>]*class=\"[^\"]*woocommerce-loop-product__title[^\"]*\"[^>]*>([^<]+)<\\/h2>/);\n        const priceMatch = section.match(/<ins[^>]*>[\\s\\S]*?<bdi>([\\d\\.,]+)&nbsp;<span class=\"woocommerce-Price-currencySymbol\"[^>]*>/i) ||\n                           section.match(/<span class=\"woocommerce-Price-amount amount\">[\\s\\S]*?<bdi>([\\d\\.,]+)&nbsp;<span class=\"woocommerce-Price-currencySymbol\"[^>]*>/i);\n        const idMatch = section.match(/post-(\\d+)/);\n\n        if (urlMatch && titleMatch && priceMatch) {\n          const url = urlMatch[1];\n          let rawTitle = titleMatch[1].trim();\n          const price = parseFloat(priceMatch[1].replace(/\\./g, '').replace(',', '.'));\n          const id = idMatch ? idMatch[1] : url.split('/').filter(Boolean).pop();\n          const pid = 'gaming_gen_' + id;\n\n          // Extract specs from list if present\n          const specs = [...section.matchAll(/<span class=\"model\">([^<]+)<\\/span>/g)].map(m => m[1].trim());\n          if (specs.length > 0) {\n            rawTitle += ' (' + specs.join(' / ') + ')';\n          }\n          rawTitle = rawTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n\n          if (!allProducts.some(x => x.product_id === pid)) {\n            allProducts.push({\n              product_id: pid,\n              source_site: 'gaming_gen_tr',\n              product_name: rawTitle,\n              product_url: url,\n              current_price: price,\n              previous_price: price,\n              in_stock: inStock\n            });\n          }\n        }\n      }\n    }\n\n    // 2. GameGaraj\n    else if (target.site === 'gamegaraj') {\n      const cards = html.split(/<div class=\"w-full p-6 hover:scale-105/);\n      for (let i = 1; i < cards.length; i++) {\n        const card = cards[i];\n        const linkMatch = card.match(/href=\"(\\/(?:oem-paketler|urun)\\/([a-zA-Z0-9_\\-]+)\\/?)\"/);\n        const titleMatch = card.match(/title=\"([^\"]+)\"/);\n        const priceMatch = card.match(/>([\\d\\.,]+)\\s*TL<\\/p>/i);\n\n        if (linkMatch && titleMatch && priceMatch) {\n          const url = 'https://www.gamegaraj.com' + linkMatch[1];\n          const slug = linkMatch[2];\n          const rawTitle = titleMatch[1].trim();\n          const price = parseFloat(priceMatch[1].replace(/\\./g, '').replace(',', '.'));\n          const inStock = !card.includes('Tükendi') && !card.includes('Stokta Yok');\n\n          const cpu = (card.match(/İşlemci:\\s*([^<]+)/)?.[1] || '').trim();\n          const gpu = (card.match(/Ekran Kartı:\\s*([^<]+)/)?.[1] || '').trim();\n          const ram = (card.match(/RAM:\\s*([^<]+)/)?.[1] || '').trim();\n          const ssd = (card.match(/SSD:\\s*([^<]+)/)?.[1] || '').trim();\n\n          const specParts = [cpu, gpu, ram, ssd].filter(Boolean);\n          let fullTitle = rawTitle;\n          if (specParts.length > 0) fullTitle += ' (' + specParts.join(' / ') + ')';\n          fullTitle = fullTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n          const pid = 'gamegaraj_' + slug;\n\n          if (!allProducts.some(x => x.product_id === pid)) {\n            allProducts.push({\n              product_id: pid,\n              source_site: 'gamegaraj',\n              product_name: fullTitle,\n              product_url: url,\n              current_price: price,\n              previous_price: price,\n              in_stock: inStock\n            });\n          }\n        }\n      }\n    }\n\n    // 3. Itopya\n    else if (target.site === 'itopya') {\n      const cards = html.split(/<div class=\"product\"/);\n      for (let i = 1; i < cards.length; i++) {\n        const card = cards[i];\n        const linkMatch = card.match(/href=\"(\\/(?:[^\"]+)_h(\\d+))\"/);\n        const titleMatch = card.match(/<h2[^>]*class=\"eseoContainer\"[^>]*>([^<]+)<\\/h2>/i) ||\n                           card.match(/alt=\"([^\"]+)\"/i);\n        const priceMatch = card.match(/class=\"product-price\"[\\s\\S]*?<strong>([\\d\\.,]+)\\s*<abbr/i);\n\n        if (linkMatch && titleMatch && priceMatch) {\n          const url = 'https://www.itopya.com' + linkMatch[1];\n          const id = linkMatch[2];\n          let rawTitle = titleMatch[1].trim();\n          const price = parseFloat(priceMatch[1].replace(/\\./g, '').replace(',', '.'));\n          const inStock = !card.includes('Tükendi') && !card.includes('Stokta Yok');\n\n          rawTitle = rawTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n          const pid = 'itopya_' + id;\n\n          if (!allProducts.some(x => x.product_id === pid)) {\n            allProducts.push({\n              product_id: pid,\n              source_site: 'itopya',\n              product_name: rawTitle,\n              product_url: url,\n              current_price: price,\n              previous_price: price,\n              in_stock: inStock\n            });\n          }\n        }\n      }\n    }\n\n    // 4. PcKolik\n    else if (target.site === 'pckolik') {\n      let systems = [];\n\n      // Primary: Next.js embedded JSON payload (systems array)\n      const escIdx = html.indexOf('\\\\\"systems\\\\\":[');\n      const plainIdx = html.indexOf('\"systems\":[');\n      const isEscaped = escIdx !== -1;\n      const startIdx = isEscaped ? escIdx + '\\\\\"systems\\\\\":'.length : (plainIdx !== -1 ? plainIdx + '\"systems\":'.length : -1);\n\n      if (startIdx !== -1) {\n        let bracketCount = 0;\n        let started = false;\n        let endIdx = -1;\n        for (let i = startIdx; i < html.length; i++) {\n          if (html[i] === '[') {\n            bracketCount++;\n            started = true;\n          } else if (html[i] === ']') {\n            bracketCount--;\n            if (started && bracketCount === 0) {\n              endIdx = i;\n              break;\n            }\n          }\n        }\n\n        if (endIdx !== -1) {\n          const rawSlice = html.slice(startIdx, endIdx + 1);\n          const jsonStr = isEscaped ? rawSlice.replace(/\\\\\"/g, '\"').replace(/\\\\\\\\/g, '\\\\') : rawSlice;\n          try {\n            systems = JSON.parse(jsonStr);\n          } catch (e) {\n            console.error('Failed to parse PcKolik systems JSON:', e.message);\n          }\n        }\n      }\n\n      if (Array.isArray(systems) && systems.length > 0) {\n        for (const item of systems) {\n          if (!item.id || !item.name) continue;\n\n          const pid = 'pckolik_' + item.id;\n          const url = 'https://pckolik.com.tr/hazir-sistem/' + (item.slug || item.id);\n          const price = Number(item.price) || 0;\n          const inStock = Boolean(item.inStock);\n\n          const specs = Array.isArray(item.specs) ? item.specs : [];\n          const cpu = specs.find(s => s.icon === 'cpu')?.label || item.facetler?.cpuSeri || '';\n          const gpu = specs.find(s => s.icon === 'gpu')?.label || item.facetler?.gpuModel || '';\n          const ram = specs.find(s => s.icon === 'ram')?.label || item.facetler?.ramTipi || '';\n          const ssd = specs.find(s => s.icon === 'ssd')?.label || '';\n\n          const specParts = [cpu, gpu, ram, ssd].filter(Boolean);\n          let fullTitle = item.name;\n          if (specParts.length > 0) {\n            fullTitle += ' (' + specParts.join(' / ') + ')';\n          }\n          fullTitle = fullTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n\n          if (!allProducts.some(x => x.product_id === pid)) {\n            allProducts.push({\n              product_id: pid,\n              source_site: 'pckolik',\n              product_name: fullTitle,\n              product_url: url,\n              current_price: price,\n              previous_price: price,\n              in_stock: inStock\n            });\n          }\n        }\n      } else {\n        // Fallback: strictly bounded card containers (prevents attribute bleed across cards)\n        const cardChunks = html.split(/<div class=\"[^\"]*rounded-xl border border-line[^\"]*\">/);\n        for (let i = 1; i < cardChunks.length; i++) {\n          const chunk = cardChunks[i];\n          const urlMatch = chunk.match(/href=\"(\\/hazir-sistem\\/[^\"]+--([a-zA-Z0-9]+))\"/);\n          const titleMatch = chunk.match(/<h3[^>]*>([^<]+)<\\/h3>/);\n          const priceMatch = chunk.match(/class=\"price-now[^\"]*\"[^>]*>([\\d\\.,]+)/);\n\n          if (urlMatch && titleMatch && priceMatch) {\n            const url = 'https://pckolik.com.tr' + urlMatch[1];\n            const id = urlMatch[2];\n            const rawTitle = titleMatch[1].trim();\n            const price = parseFloat(priceMatch[1].replace(/\\./g, '').replace(',', '.'));\n            const inStock = !chunk.includes('Tükendi') && !chunk.includes('Stokta Yok');\n            const pid = 'pckolik_' + id;\n\n            if (!allProducts.some(x => x.product_id === pid)) {\n              allProducts.push({\n                product_id: pid,\n                source_site: 'pckolik',\n                product_name: rawTitle,\n                product_url: url,\n                current_price: price,\n                previous_price: price,\n                in_stock: inStock\n              });\n            }\n          }\n        }\n      }\n    }\n\n    // 5. Vatan Bilgisayar\n    else if (target.site === 'vatan') {\n      const regex = /<div class=\"product-list__content\">[\\s\\S]*?<a[^>]*href=\"([^\"]+)\"[\\s\\S]*?<h3>([^<]+)<\\/h3>[\\s\\S]*?class=\"product-list__price\">([\\d\\.,]+)/g;\n      let m;\n      while ((m = regex.exec(html)) !== null) {\n        const url = m[1].startsWith('http') ? m[1] : ('https://www.vatanbilgisayar.com' + m[1]);\n        const rawTitle = m[2].trim();\n        const price = parseFloat(m[3].replace(/\\./g, '').replace(',', '.'));\n        const id = url.split('/').pop().replace('.html', '');\n        const block = html.slice(m.index, m.index + 1200);\n        const inStock = !block.includes('Tükendi') && !block.includes('Stokta Yok');\n        const pid = 'vatan_' + id;\n\n        if (!allProducts.some(x => x.product_id === pid)) {\n          allProducts.push({\n            product_id: pid,\n            source_site: 'vatan',\n            product_name: rawTitle,\n            product_url: url,\n            current_price: price,\n            previous_price: price,\n            in_stock: inStock\n          });\n        }\n      }\n    }\n\n    // 6. MediaMarkt\n    else if (target.site === 'mediamarkt') {\n      const ldMatches = html.match(/<script[^>]*type=\"application\\/ld\\+json\"[^>]*>([\\s\\S]*?)<\\/script>/gi) || [];\n      for (const scriptTag of ldMatches) {\n        const jsonText = scriptTag.replace(/<script[^>]*>/, '').replace(/<\\/script>/, '');\n        try {\n          const data = JSON.parse(jsonText);\n          if (data['@type'] === 'ItemList' && Array.isArray(data.itemListElement)) {\n            for (const li of data.itemListElement) {\n              const item = li.item;\n              if (!item || !item.name || !item.url) continue;\n              let rawTitle = item.name.trim();\n              rawTitle = rawTitle.replace(/(\\d+)(ti|super|xt)\\b/gi, '$1 $2');\n              const price = Number(item.offers?.price) || 0;\n              const url = item.url;\n              const id = url.split('-').pop().replace('.html', '');\n              const pid = 'mediamarkt_' + id;\n\n              if (!allProducts.some(x => x.product_id === pid)) {\n                allProducts.push({\n                  product_id: pid,\n                  source_site: 'mediamarkt',\n                  product_name: rawTitle,\n                  product_url: url,\n                  current_price: price,\n                  previous_price: price,\n                  in_stock: true\n                });\n              }\n            }\n          }\n        } catch (e) {}\n      }\n    }\n  } catch (err) {\n    console.error(`Error parsing site ${target.site} page ${target.page}:`, err.message);\n  }\n}\n\n// Helper: check if product matches filter\nfunction matchesFilter(product, filter) {\n  const name = product.product_name.toLowerCase();\n  \n  if (filter.source_site && filter.source_site !== 'all' && filter.source_site !== product.source_site) {\n    return false;\n  }\n  \n  if (filter.min_price && product.current_price < filter.min_price) return false;\n  if (filter.max_price && product.current_price > filter.max_price) return false;\n  \n  // Exclude keywords\n  if (filter.exclude_keywords) {\n    const excludes = filter.exclude_keywords.split(/[,+]/).map(s => s.trim().toLowerCase()).filter(Boolean);\n    for (const ex of excludes) {\n      if (name.includes(ex)) return false;\n    }\n  }\n  \n  // Include keywords: ALL specified keywords must match (AND logic)\n  if (filter.include_keywords) {\n    let includes = [];\n    if (filter.include_keywords.includes(',')) {\n      includes = filter.include_keywords.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);\n    } else if (filter.include_keywords.includes('+')) {\n      includes = filter.include_keywords.split('+').map(s => s.trim().toLowerCase()).filter(Boolean);\n    } else {\n      includes = filter.include_keywords.split(/\\s+/).map(s => s.trim().toLowerCase()).filter(Boolean);\n    }\n    \n    const includesTi = includes.some(k => /\\bti\\b/i.test(k));\n    const includesSuper = includes.some(k => /\\bsuper\\b/i.test(k));\n    const includesXt = includes.some(k => /\\bxt\\b/i.test(k));\n    \n    for (const inc of includes) {\n      const isModelNumber = /^\\d{4}$/.test(inc);\n      let pattern;\n      if (isModelNumber) {\n        const forbidden = [];\n        if (!includesTi) forbidden.push('ti');\n        if (!includesSuper) forbidden.push('super');\n        if (!includesXt) forbidden.push('xt');\n        \n        if (forbidden.length > 0) {\n          pattern = new RegExp('\\\\b' + inc + '\\\\b(?!\\\\s*(?:' + forbidden.join('|') + '))', 'i');\n        } else {\n          pattern = new RegExp('\\\\b' + inc + '\\\\b', 'i');\n        }\n      } else {\n        const procMatch = inc.match(/^(\\d{4,5})([a-zA-Z]+)$/);\n        if (procMatch) {\n          pattern = new RegExp('\\\\b' + procMatch[1] + '\\\\s*' + procMatch[2] + '\\\\b', 'i');\n        } else {\n          pattern = new RegExp('\\\\b' + inc.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '\\\\b', 'i');\n        }\n      }\n      \n      if (!pattern.test(name)) return false;\n    }\n  }\n  \n  return true;\n}\n\n// Tag products with all matching filters\nconst outputItems = [];\nfor (const product of allProducts) {\n  const matchedFilters = [];\n  for (const filter of activeFilters) {\n    if (matchesFilter(product, filter)) {\n      matchedFilters.push({\n        id: filter.id,\n        drop_threshold_percent: filter.drop_threshold_percent || 5,\n        notify_dm: Boolean(filter.notify_dm || false),\n        discord_user_id: String(filter.discord_user_id || '')\n      });\n    }\n  }\n  \n  outputItems.push({\n    ...product,\n    matched_filters: matchedFilters,\n    is_filter_matched: matchedFilters.length > 0,\n    drop_threshold_percent: matchedFilters.length > 0 ? Math.min(...matchedFilters.map(f => f.drop_threshold_percent)) : 5\n  });\n}\n\nreturn outputItems.map(item => ({ json: item }));",
+          "language": "javaScript"
+        },
+        "id": "256f507d-3754-47d7-89d5-a52756238c97",
+        "name": "Parse and Apply Filters",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "MZ5jUhvyTbqRUOdk"
+          },
+          "returnAll": true
+        },
+        "id": "1f6194b2-14f0-4637-a1ca-16d95d537d79",
+        "name": "Get Price History",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1120,
+          96
+        ],
+        "executeOnce": true,
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const historyRows = $('Get Price History').all().map(i => i.json);\nconst historyMap = new Map();\nfor (const row of historyRows) {\n  if (row.product_id) {\n    historyMap.set(row.product_id, row);\n  }\n}\n\nconst siteLabels = {\n  gaming_gen_tr: 'Gaming.gen.tr',\n  gamegaraj: 'GameGaraj',\n  itopya: 'İtopya',\n  pckolik: 'PcKolik',\n  vatan: 'Vatan Bilgisayar',\n  mediamarkt: 'MediaMarkt'\n};\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const p = item.json;\n  const history = historyMap.get(p.product_id);\n  \n  let previousPrice = p.previous_price || p.current_price;\n  let dropPercent = 0;\n  const notifications = [];\n  \n  if (history && history.current_price) {\n    previousPrice = history.current_price;\n\n    // Safety check 1: if base product name changed completely, the old row was mismatched or repurposed. Baseline it!\n    const oldBase = (history.product_name || '').split('(')[0].trim().toLowerCase();\n    const newBase = (p.product_name || '').split('(')[0].trim().toLowerCase();\n    if (oldBase && newBase && !oldBase.includes(newBase) && !newBase.includes(oldBase)) {\n      previousPrice = p.current_price;\n    }\n\n    // Safety check 2: baseline any PcKolik records saved prior to 2026-10-29 13:40 UTC to prevent false discounts from corrupted regex history\n    if (p.source_site === 'pckolik') {\n      const rowTime = history.last_checked_at ? new Date(history.last_checked_at).getTime() : 0;\n      if (rowTime < 1793281500000) {\n        previousPrice = p.current_price;\n      }\n    }\n\n    if (p.current_price < previousPrice) {\n      dropPercent = ((previousPrice - p.current_price) / previousPrice) * 100;\n      \n      // Per AGENTS.md: Stokta olmayan ürünü indirim sayma.\n      if (p.in_stock && p.matched_filters && p.matched_filters.length > 0) {\n        for (const mf of p.matched_filters) {\n          if (dropPercent >= mf.drop_threshold_percent) {\n            const isDm = Boolean(mf.notify_dm && mf.discord_user_id);\n            const safeTitle = p.product_name.length > 230 ? p.product_name.slice(0, 227) + '...' : p.product_name;\n            const embed = {\n              title: '🔥 FİYAT DÜŞÜŞÜ: ' + safeTitle,\n              url: p.product_url,\n              color: 3066993,\n              fields: [\n                {\n                  name: '🏢 Kaynak Site',\n                  value: siteLabels[p.source_site] || p.source_site,\n                  inline: true\n                },\n                {\n                  name: '📉 İndirim Oranı',\n                  value: '%' + dropPercent.toFixed(1) + ' Düşüş',\n                  inline: true\n                },\n                {\n                  name: '📦 Stok Durumu',\n                  value: p.in_stock ? 'Stokta Var ✅' : 'Tükendi ❌',\n                  inline: true\n                },\n                {\n                  name: '💰 Eski Fiyat',\n                  value: previousPrice.toLocaleString('tr-TR') + ' ₺',\n                  inline: true\n                },\n                {\n                  name: '🏷️ Yeni Fiyat',\n                  value: '**' + p.current_price.toLocaleString('tr-TR') + ' ₺**',\n                  inline: true\n                }\n              ],\n              footer: {\n                text: 'n8n Fiyat Takip Sistemi • ' + (isDm ? 'Özel Bildirim (DM)' : 'Kanal Bildirimi')\n              },\n              timestamp: new Date().toISOString()\n            };\n            \n            notifications.push({\n              is_dm: isDm,\n              discord_user_id: mf.discord_user_id || '',\n              target_channel_id: isDm ? null : 'YOUR_DISCORD_NOTIFICATION_CHANNEL_ID',\n              discordPayload: { embeds: [embed] }\n            });\n          }\n        }\n      }\n    }\n  }\n  \n  results.push({\n    json: {\n      product_id: p.product_id,\n      source_site: p.source_site,\n      product_name: p.product_name,\n      product_url: p.product_url,\n      current_price: p.current_price,\n      previous_price: previousPrice,\n      in_stock: p.in_stock,\n      shouldNotify: notifications.length > 0,\n      notifications: notifications\n    }\n  });\n}\n\nreturn results;",
+          "language": "javaScript"
+        },
+        "id": "f74d22c1-e653-47ba-9f55-c306e75375c5",
+        "name": "Compare and Detect Drops",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "MZ5jUhvyTbqRUOdk"
+          },
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "product_id",
+                "keyValue": "={{ $json.product_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "product_id": "={{ $json.product_id }}",
+              "source_site": "={{ $json.source_site }}",
+              "product_name": "={{ $json.product_name }}",
+              "product_url": "={{ $json.product_url }}",
+              "current_price": "={{ $json.current_price }}",
+              "previous_price": "={{ $json.previous_price }}",
+              "in_stock": "={{ $json.in_stock }}",
+              "last_checked_at": "={{ $now.toISO() }}"
+            }
+          },
+          "options": {}
+        },
+        "id": "5c11be4c-2a91-4ec0-ab07-97c375846a1e",
+        "name": "Update Price History",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1344,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "hours"
+              }
+            ]
+          }
+        },
+        "id": "338d75ef-9ae1-45ae-8750-9bea362c6e6c",
+        "name": "Hourly Schedule",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "combinator": "and",
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.shouldNotify }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "equals"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "c9988041-bc53-4746-9a9e-f65369b1e54c",
+        "name": "Check If Drop Detected",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1344,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://discord.com/api/v10/channels/YOUR_DISCORD_NOTIFICATION_CHANNEL_ID/messages",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ JSON.stringify($json.discordPayload) }}",
+          "options": {}
+        },
+        "id": "79dcf501-26b8-4561-912f-f60043b2da57",
+        "name": "Send Discord Alert",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          192
+        ]
+      },
+      {
+        "id": "ca6dc88a-70c6-4d7d-ac2c-f0d38bc30752",
+        "name": "Generate Scrape Targets",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          96
+        ],
+        "parameters": {
+          "jsCode": "const targets = [];\n\n// 1. GamingGen (13 pages)\nfor (let p = 1; p <= 13; p++) {\n  targets.push({\n    site: 'gaming_gen_tr',\n    page: p,\n    url: p === 1 ? 'https://www.gaming.gen.tr/kategori/hazir-sistemler/' : 'https://www.gaming.gen.tr/kategori/hazir-sistemler/page/' + p + '/'\n  });\n}\n\n// 2. GameGaraj (4 pages)\nfor (let p = 1; p <= 4; p++) {\n  targets.push({\n    site: 'gamegaraj',\n    page: p,\n    url: p === 1 ? 'https://www.gamegaraj.com/oem-paketler/' : 'https://www.gamegaraj.com/oem-paketler/?page=' + p\n  });\n}\n\n// 3. Itopya (pg=40 pulls all 789 products in one efficient request)\ntargets.push({\n  site: 'itopya',\n  page: 1,\n  url: 'https://www.itopya.com/oem-paketler/?pg=40'\n});\n\n// 4. PcKolik (Next.js payload contains all ready systems on initial page)\ntargets.push({\n  site: 'pckolik',\n  page: 1,\n  url: 'https://pckolik.com.tr/hazir-sistem'\n});\n\n// 5. Vatan Bilgisayar (10 pages)\nfor (let p = 1; p <= 10; p++) {\n  targets.push({\n    site: 'vatan',\n    page: p,\n    url: p === 1 ? 'https://www.vatanbilgisayar.com/oem-paketler' : 'https://www.vatanbilgisayar.com/oem-paketler?page=' + p\n  });\n}\n\n// 6. MediaMarkt (3 pages)\nfor (let p = 1; p <= 3; p++) {\n  targets.push({\n    site: 'mediamarkt',\n    page: p,\n    url: p === 1 ? 'https://www.mediamarkt.com.tr/tr/category/oem-hazir-sistemler-860020.html' : 'https://www.mediamarkt.com.tr/tr/category/oem-hazir-sistemler-860020.html?page=' + p\n  });\n}\n\nreturn targets.map(t => ({ json: t }));",
+          "language": "javaScript"
+        }
+      },
+      {
+        "id": "63cc3e8a-bbd8-440b-8014-4a5ca96e535e",
+        "name": "Fetch Target Page",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          672,
+          96
+        ],
+        "parameters": {
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            }
+          },
+          "sendHeaders": true,
+          "url": "={{ $json.url }}"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "115cf3cf-3a35-45de-b7bd-8b9a0cabeae8",
+        "name": "Get Debug Config",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          150,
+          96
+        ],
+        "parameters": {
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "wru3e3nz0vOoJC2v"
+          },
+          "operation": "get",
+          "options": {},
+          "returnAll": true
+        }
+      },
+      {
+        "id": "65a1461b-804e-4069-a0e2-0b2ec72cdfac",
+        "name": "Prepare Debug Messages",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1400,
+          300
+        ],
+        "parameters": {
+          "jsCode": "const debugConfigs = $('Get Debug Config').all().map(i => i.json);\nconst debugConfig = debugConfigs[0] || {};\n\nif (!debugConfig.is_active || !debugConfig.channel_id) {\n  return [];\n}\n\nconst targetChannelId = String(debugConfig.channel_id).trim();\nconst verbose = Boolean(debugConfig.verbose);\n\nconst targets = $('Generate Scrape Targets').all();\nconst responses = $('Fetch Target Page').all();\nconst allProducts = $input.all().map(i => i.json);\n\n// Scrape Statistics per site\nconst siteStats = {\n  gaming_gen_tr: { name: 'Gaming.gen.tr', totalPages: 13, successPages: 0, failPages: [], productCount: 0 },\n  gamegaraj: { name: 'GameGaraj', totalPages: 4, successPages: 0, failPages: [], productCount: 0 },\n  itopya: { name: 'İtopya', totalPages: 1, successPages: 0, failPages: [], productCount: 0 },\n  pckolik: { name: 'PcKolik', totalPages: 1, successPages: 0, failPages: [], productCount: 0 },\n  vatan: { name: 'Vatan Bilgisayar', totalPages: 10, successPages: 0, failPages: [], productCount: 0 },\n  mediamarkt: { name: 'MediaMarkt', totalPages: 3, successPages: 0, failPages: [], productCount: 0 }\n};\n\nfor (let idx = 0; idx < targets.length; idx++) {\n  const target = targets[idx]?.json || {};\n  const resp = responses[idx]?.json || {};\n  const html = resp.data || resp.body || '';\n  const siteKey = target.site;\n  \n  if (!siteStats[siteKey]) continue;\n  \n  if (typeof html === 'string' && html.length > 500) {\n    siteStats[siteKey].successPages++;\n  } else {\n    siteStats[siteKey].failPages.push(target.page || idx + 1);\n  }\n}\n\n// Calculate product counts per site\nfor (const p of allProducts) {\n  if (p.source_site && siteStats[p.source_site]) {\n    siteStats[p.source_site].productCount++;\n  }\n}\n\nlet totalSuccessPages = 0;\nlet totalTargets = targets.length;\nlet statusLines = [];\n\nfor (const [key, st] of Object.entries(siteStats)) {\n  totalSuccessPages += st.successPages;\n  if (st.successPages === 0) {\n    statusLines.push('• **' + st.name + ':** tarama başarısız ❌');\n  } else if (st.failPages.length > 0) {\n    statusLines.push('• **' + st.name + ':** Taranan sayfalar: ' + st.successPages + '/' + st.totalPages + ' (' + st.productCount + ' sistem) - ' + st.failPages.length + ' sayfa başarısız ⚠️');\n  } else {\n    statusLines.push('• **' + st.name + ':** Taranan sayfalar: ' + st.totalPages + ' (' + st.productCount + ' sistem) ✅');\n  }\n}\n\nconst siteStatusHeader = '📋 **Site Tarama Durumları:**\\n' + statusLines.join('\\n');\nconst overallSuccess = totalSuccessPages === totalTargets;\nconst outputMessages = [];\n\nif (!verbose) {\n  // Non-verbose: site statuses at the top + general summary\n  const summaryDesc = siteStatusHeader + '\\n\\n' +\n    '📊 **Genel Durum:**\\n' +\n    '• **Başarılı Sayfa:** **' + totalSuccessPages + ' / ' + totalTargets + '**\\n' +\n    '• **Toplam Sistem:** **' + allProducts.length + ' adet**\\n' +\n    '• **Sonuç:** ' + (overallSuccess ? 'Tüm siteler başarıyla çekildi ✅' : 'Bazı sayfalarda sorun oluştu ⚠️') + '\\n' +\n    '• **Tarama Saati:** <t:' + Math.floor(Date.now() / 1000) + ':T>';\n\n  const summaryEmbed = {\n    title: '🛠️ Donanım Siteleri Tarama Raporu (Debug)',\n    color: overallSuccess ? 3066993 : 15158332,\n    description: summaryDesc,\n    footer: {\n      text: 'n8n Fiyat Takip Debug • Verbose: Kapalı'\n    },\n    timestamp: new Date().toISOString()\n  };\n\n  outputMessages.push({\n    channel_id: targetChannelId,\n    discordPayload: { embeds: [summaryEmbed] }\n  });\n} else {\n  // Verbose: site statuses at the top + top 10 systems + pagination buttons\n  const sortedProducts = [...allProducts]\n    .filter(p => p.current_price && p.in_stock !== false)\n    .sort((a, b) => a.current_price - b.current_price);\n    \n  const pageSize = 10;\n  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / pageSize));\n  const currentPage = 1;\n  const pageItems = sortedProducts.slice(0, pageSize);\n  \n  const siteLabels = {\n    gaming_gen_tr: 'Gaming.gen.tr',\n    gamegaraj: 'GameGaraj',\n    itopya: 'İtopya',\n    pckolik: 'PcKolik',\n    vatan: 'Vatan Bilgisayar',\n    mediamarkt: 'MediaMarkt'\n  };\n  \n  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };\n  let productText = '';\n  for (let i = 0; i < pageItems.length; i++) {\n    const p = pageItems[i];\n    const rank = i + 1;\n    const badge = medals[rank] || ('`#' + rank + '`');\n    const siteName = siteLabels[p.source_site] || p.source_site;\n    const priceStr = Number(p.current_price).toLocaleString('tr-TR') + ' ₺';\n    productText += badge + ' **[' + p.product_name + '](' + p.product_url + ')**\\n';\n    productText += '   └ 💰 **' + priceStr + '** | 🏢 ' + siteName + '\\n\\n';\n  }\n  \n  const verboseComponents = totalPages > 1 ? [\n    {\n      type: 1,\n      components: [\n        {\n          type: 2,\n          style: 2,\n          label: '◀️ Önceki',\n          custom_id: 'dbg_p:0',\n          disabled: true\n        },\n        {\n          type: 2,\n          style: 2,\n          label: 'Sayfa 1 / ' + totalPages,\n          custom_id: 'dbg_cur:1',\n          disabled: true\n        },\n        {\n          type: 2,\n          style: 1,\n          label: 'Sonraki ▶️',\n          custom_id: 'dbg_p:2',\n          disabled: totalPages <= 1\n        }\n      ]\n    }\n  ] : [];\n  \n  const fullVerboseDesc = siteStatusHeader + '\\n\\n' +\n    '━━━━━━━━━━━━━━━━━━━━━━━━━━\\n' +\n    '📦 **Taranan En Ucuz Sistemler (Sayfa 1 / ' + totalPages + '):**\\n\\n' +\n    productText;\n    \n  const verboseEmbed = {\n    title: '🛠️ Donanım Siteleri Tarama Raporu (Debug Verbose)',\n    color: 10181046,\n    description: fullVerboseDesc.trim(),\n    footer: {\n      text: 'Sayfa 1 / ' + totalPages + ' • Toplam ' + sortedProducts.length + ' sistem çekildi'\n    },\n    timestamp: new Date().toISOString()\n  };\n  \n  outputMessages.push({\n    channel_id: targetChannelId,\n    discordPayload: {\n      embeds: [verboseEmbed],\n      components: verboseComponents\n    }\n  });\n}\n\nreturn outputMessages.map(m => ({ json: m }));",
+          "language": "javaScript"
+        }
+      },
+      {
+        "id": "f3d600f7-fd40-40dc-b395-54b9700673df",
+        "name": "Send Debug Messages",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1650,
+          300
+        ],
+        "parameters": {
+          "body": "={{ JSON.stringify($json.discordPayload) }}",
+          "contentType": "raw",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "method": "POST",
+          "options": {},
+          "rawContentType": "application/json",
+          "sendBody": true,
+          "sendHeaders": true,
+          "url": "=https://discord.com/api/v10/channels/{{ $json.channel_id }}/messages"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "febe61d0-e2f0-4ac6-9808-7ed72cd2ae6e",
+        "name": "Format Notification Items",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1850,
+          100
+        ],
+        "parameters": {
+          "jsCode": "const allItems = $input.all();\nconst flatNotifs = [];\nconst seen = new Set();\n\nfor (const item of allItems) {\n  const notifs = item.json.notifications || [];\n  for (const n of notifs) {\n    const key = (n.is_dm ? ('dm_' + n.discord_user_id) : ('ch_' + n.target_channel_id)) + '_' + item.json.product_id;\n    if (!seen.has(key)) {\n      seen.add(key);\n      flatNotifs.push({\n        json: {\n          ...n,\n          product_id: item.json.product_id\n        }\n      });\n    }\n  }\n}\n\nreturn flatNotifs;\n",
+          "language": "javaScript"
+        }
+      },
+      {
+        "id": "e1d9186d-4131-4f9c-9896-1aa98742078e",
+        "name": "Is DM Notification?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2050,
+          100
+        ],
+        "parameters": {
+          "conditions": {
+            "combinator": "and",
+            "conditions": [
+              {
+                "leftValue": "={{ $json.is_dm }}",
+                "operator": {
+                  "operation": "equals",
+                  "type": "boolean"
+                },
+                "rightValue": true
+              }
+            ],
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            }
+          }
+        }
+      },
+      {
+        "id": "a3591cfd-bf59-4be2-8bad-acd8820e6a55",
+        "name": "Open Discord DM Channel",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2300,
+          180
+        ],
+        "parameters": {
+          "body": "={{ JSON.stringify({ recipient_id: $json.discord_user_id }) }}",
+          "contentType": "raw",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "method": "POST",
+          "options": {},
+          "rawContentType": "application/json",
+          "sendBody": true,
+          "sendHeaders": true,
+          "url": "https://discord.com/api/v10/users/@me/channels"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "b736ec59-2bc2-43bb-9a66-8991c5862aaa",
+        "name": "Send Discord DM Alert",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2550,
+          180
+        ],
+        "parameters": {
+          "body": "={{ JSON.stringify($('Format Notification Items').item.json.discordPayload) }}",
+          "contentType": "raw",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "method": "POST",
+          "options": {},
+          "rawContentType": "application/json",
+          "sendBody": true,
+          "sendHeaders": true,
+          "url": "=https://discord.com/api/v10/channels/{{ $json.id }}/messages"
+        },
+        "onError": "continueRegularOutput"
+      }
+    ],
+    "connections": {
+      "Get Active Filters": {
+        "main": [
+          [
+            {
+              "node": "Get Price History",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse and Apply Filters": {
+        "main": [
+          [
+            {
+              "node": "Compare and Detect Drops",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Prepare Debug Messages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Compare and Detect Drops": {
+        "main": [
+          [
+            {
+              "node": "Update Price History",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Check If Drop Detected",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Price History": {
+        "main": [
+          [
+            {
+              "node": "Generate Scrape Targets",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Generate Scrape Targets": {
+        "main": [
+          [
+            {
+              "node": "Fetch Target Page",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Target Page": {
+        "main": [
+          [
+            {
+              "node": "Parse and Apply Filters",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Test": {
+        "main": [
+          [
+            {
+              "node": "Get Debug Config",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Hourly Schedule": {
+        "main": [
+          [
+            {
+              "node": "Get Debug Config",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Debug Config": {
+        "main": [
+          [
+            {
+              "node": "Get Active Filters",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Debug Messages": {
+        "main": [
+          [
+            {
+              "node": "Send Debug Messages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check If Drop Detected": {
+        "main": [
+          [
+            {
+              "node": "Format Notification Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Notification Items": {
+        "main": [
+          [
+            {
+              "node": "Is DM Notification?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is DM Notification?": {
+        "main": [
+          [
+            {
+              "node": "Open Discord DM Channel",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send Discord Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Open Discord DM Channel": {
+        "main": [
+          [
+            {
+              "node": "Send Discord DM Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": []
+  },
+  "tags": [],
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "parentFolderId": null,
+  "description": "Gaming.gen.tr ve GameGaraj hazir sistem fiyatlarini takip edip indirimde Discord bildirimi gonderen workflow",
+  "scopes": [
+    "execution:reveal",
+    "workflow:delete",
+    "workflow:disableRedaction",
+    "workflow:enableRedaction",
+    "workflow:execute",
+    "workflow:execute-chat",
+    "workflow:export",
+    "workflow:move",
+    "workflow:publish",
+    "workflow:read",
+    "workflow:share",
+    "workflow:unpublish",
+    "workflow:unshare",
+    "workflow:update"
+  ],
+  "canExecute": true
+}

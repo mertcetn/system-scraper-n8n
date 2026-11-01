@@ -1,0 +1,15 @@
+# Secrets and credentials
+bilgiler.txt
+*.token
+*.env
+.env
+scratch/
+
+# Local agent & environment configs (contains API bearer tokens)
+.agents/
+
+# System & editor files
+*.log
+.DS_Store
+Thumbs.db
+node_modules/
