@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Bu dosya, bu projede çalışan AI agent'lar için genel kurallar, mimari prensipler ve çalışma sınırlarıdır. 
-Teknik detaylar, workflow yapıları, veri modelleri ve kod implementasyonu için [IMPLEMENTATION.md](file:///c:/Users/cetin/Documents/Projects/web-scraper-n8n/IMPLEMENTATION.md) dosyasına başvurun.
+Teknik detaylar, workflow yapıları, veri modelleri ve kod implementasyonu için [IMPLEMENTATION.md](./IMPLEMENTATION.md) dosyasına başvurun.
 
 ---
 
@@ -49,4 +49,4 @@ Bu sitelerin genel bir açık API'si bulunmamaktadır; veri sitelerin gömülü 
 2. Filtreler olumlu ve olumsuz örneklerle test edildi (örn: `"5060"` eşleşir, `"5060 Ti"` eşleşmez).
 3. Hatalı veya değişen ürünlerde sahte indirim üretilmediği doğrulandı.
 4. Dosyalarda ve export edilen workflow'larda hiçbir gizli bilgi kalmadı.
-5. Yapılan değişiklikler [IMPLEMENTATION.md](file:///c:/Users/cetin/Documents/Projects/web-scraper-n8n/IMPLEMENTATION.md) dosyasına işlendi.
+5. Yapılan değişiklikler [IMPLEMENTATION.md](./IMPLEMENTATION.md) dosyasına işlendi.

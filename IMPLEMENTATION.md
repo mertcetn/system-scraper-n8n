@@ -200,3 +200,4 @@ En son canlı çalıştırma (Execution ID: `3012`) itibarıyla elde edilen metr
 - **Toplam Taranan Canlı Sistem:** **1.523 adet**
 - **Ortalama Tarama Süresi:** ~26 saniye
 - **Hatalı Bildirim Oranı:** %0
+
