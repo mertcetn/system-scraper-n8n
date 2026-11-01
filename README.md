@@ -88,3 +88,4 @@ JSON dosyalarında yer alan aşağıdaki yer tutucuları kendi Discord bot bilgi
 
 - Proje hiçbir gizli API anahtarı, bot token'ı veya kimlik doğrulama başlığı barındırmaz.
 - Tüm sırlar `.gitignore` kapsamındadır.
+
