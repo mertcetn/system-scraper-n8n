@@ -1,203 +1,176 @@
-# IMPLEMENTATION.md
+# Implementation
 
-Bu dosya, projenin teknik mimarisini, n8n workflow düğümlerini, site ayrıştırma (scraping) algoritmalarını, veritabanı şemalarını ve şu ana kadar uygulanan tüm özellikleri teknik ayrıntılarıyla dökümante eder.
+Technical reference for the n8n workflows, retailer parsers, filtering rules, and persistent data models. Workflow and table IDs below identify the originally documented deployment; select the corresponding resources when importing into another instance.
 
----
+## Architecture
 
-## 🏗️ 1. Genel Mimari ve Sistem Akışı
-
-Sistem iki ana n8n workflow'u ve 3 adet n8n Data Table etrafında kuruludur:
+Two workflows share three n8n Data Tables.
 
 ```mermaid
 flowchart TD
-    subgraph WF1["1. Donanım Fiyat Takipçisi (KD2PtrGjC8vb1uyL)"]
-        A[Hourly Schedule / Manual Test] --> B[Generate Scrape Targets]
-        B --> C[Fetch Target Page - HTTP Request]
-        C --> D[Parse and Apply Filters - Code JS]
-        D --> E[Get Price History - Data Table]
-        E --> F[Compare and Detect Drops - Code JS]
-        F --> G[Update Price History - Data Table Upsert]
-        F --> H{İndirim Var mı?}
-        H -- Evet --> I[Format Notification Items]
-        I --> J{DM mi, Kanal mı?}
-        J -- Kanal --> K[Send Discord Alert - HTTP]
-        J -- DM --> L[Open Discord DM Channel - HTTP]
-        L --> M[Send Discord DM Alert - HTTP]
-        D --> N[Prepare Debug Messages - Code JS]
-        N --> O[Send Debug Messages - HTTP]
-    end
-
-    subgraph WF2["2. Discord Slash Komut Yöneticisi (jy2o6YTyzSqg4Amh)"]
-        P[Discord Interactions Webhook] --> Q[Parse Interaction & Ed25519 Verify]
-        Q --> R{Route by Action}
-        R -- ping --> S[Respond Ping]
-        R -- filtre-ekle --> T[Insert Filter to Table]
-        R -- filtre-listele --> U[Get All Filters Table]
-        R -- filtre-sil --> V[Delete Filter Table]
-        R -- esik-guncelle --> W[Update Threshold Table]
-        R -- en-ucuz / sayfalama --> X[Get Price History For Cheapest]
-        R -- debug --> Y[Update Debug Config Table]
-    end
-
-    subgraph DT["n8n Data Tables"]
-        DT1[(tracking_filters)]
-        DT2[(price_history)]
-        DT3[(debug_config)]
-    end
-
-    WF1 <--> DT1
-    WF1 <--> DT2
-    WF1 <--> DT3
-    WF2 <--> DT1
-    WF2 <--> DT2
-    WF2 <--> DT3
+    A[Hourly schedule or manual trigger] --> B[Generate scrape targets]
+    B --> C[Fetch retailer pages]
+    C --> D[Parse products and apply filters]
+    D --> E[Read price history]
+    E --> F[Compare prices and detect drops]
+    F --> G[Upsert price history]
+    F --> H{Qualifying drop?}
+    H -->|Yes| I[Format and deduplicate alerts]
+    I --> J{DM enabled?}
+    J -->|No| K[Send channel alert]
+    J -->|Yes| L[Open DM channel and send alert]
+    D --> M[Prepare and send debug reports]
+    N[Discord interactions webhook] --> O[Verify signature and parse interaction]
+    O --> P[Route command or button interaction]
+    P --> Q[(tracking_filters)]
+    P --> R[(price_history)]
+    P --> S[(debug_config)]
+    Q --> D
+    R --> E
+    S --> M
 ```
 
----
+## Workflows
 
-## ⚙️ 2. Workflow Detayları
+### Price tracker
 
-### 2.1. Donanım Fiyat Takipçisi (`KD2PtrGjC8vb1uyL`)
-- **Tetikleyiciler:**
-  - `Hourly Schedule`: Saatte bir (`0 * * * *`) otomatik çalışır.
-  - `Manual Test`: Elle test çalıştırmaları için manuel tetikleyici.
-- **`Generate Scrape Targets`:**
-  - Taranacak URL'leri üretir.
-  - *Optimizasyon:* Itopya (`?pg=40` ile tek istekte 780+ ürün) ve PcKolik (Next.js gömülü verisiyle tek istekte 300+ ürün) tek sayfada toplanır. Gaming.gen.tr (13 sayfa), GameGaraj (4 sayfa), Vatan Bilgisayar (10 sayfa), MediaMarkt (3 sayfa) sayfalanarak toplam 32 hedef üretilir.
-- **`Fetch Target Page`:**
-  - Modern tarayıcı User-Agent başlıklarıyla istek atar, `neverError: true` ve `continueRegularOutput` ile tekil sayfa hatalarının tüm akışı kesmesini önler.
-- **`Parse and Apply Filters`:**
-  - Canlı sayfa içeriklerini parse eder, başlık, fiyat, link, stok ve donanım bileşenlerini (CPU, GPU, RAM, SSD) çıkarır.
-  - Aktif kullanıcı filtrelerini (`tracking_filters`) sorgulayıp ürünleri eşleştirir.
-- **`Get Price History` & `Compare and Detect Drops`:**
-  - Fiyat geçmişi tablosundan önceki fiyatı karşılaştırır.
-  - Düşüş oranını (`dropPercent`) hesaplar.
-  - Stokta olmayan ürünleri ve sahte indirimleri eler.
-- **`Update Price History`:**
-  - `product_id` bazında `upsert` yaparak güncel fiyatı, önceki fiyatı ve son kontrol zamanını yazar.
-- **Bildirim Dağıtımı:**
-  - `Format Notification Items`: Tekrarlı bildirimleri engeller, bildirimleri düzleştirir.
-  - `Is DM Notification?`: Filtrede `notify_dm: true` ve kullanıcı ID'si varsa akışı DM'e yönlendirir.
-  - `Open Discord DM Channel`: `POST /users/@me/channels` çağrısı yaparak kullanıcıyla özel DM kanalı açar.
-  - `Send Discord DM Alert` / `Send Discord Alert`: Zengin Discord Embed kartı ile bildirimi iletir.
-- **Hata ve İlerleme İzleme (Debug Pipeline):**
-  - `Get Debug Config` -> `Prepare Debug Messages` -> `Send Debug Messages`:
-  - Her taramada sitelerin başarı/başarısızlık durumlarını ve çekilen sistem sayılarını belirtilen kanala otomatik raporlar.
+Export: `workflows/donanim-fiyat-takipcisi.json`
+Original workflow ID: `KD2PtrGjC8vb1uyL`
 
----
+- **Triggers:** `Hourly Schedule` runs at `0 * * * *`; `Manual Test` supports manual checks.
+- **Generate Scrape Targets:** Produces retailer URLs. The documented configuration uses one request each for İtopya (`?pg=40`) and PcKolik, 13 pages for Gaming.gen.tr, four for GameGaraj, ten for Vatan, and three for MediaMarkt: 32 targets in total.
+- **Fetch Target Page:** Uses browser-style User-Agent headers. The documented configuration uses `neverError: true` and `continueRegularOutput` so an individual page failure does not stop the full scan. Inspect status codes and debug output to detect failures.
+- **Parse and Apply Filters:** Extracts names, prices, links, stock status, and CPU/GPU/RAM/SSD details, then matches active `tracking_filters`.
+- **Get Price History / Compare and Detect Drops:** Compares the current price with stored history, calculates `dropPercent`, and rejects unavailable stock and invalid comparison baselines.
+- **Update Price History:** Upserts by `product_id`, storing current price, previous price, and last-check time.
+- **Format Notification Items:** Flattens and deduplicates alerts.
+- **Is DM Notification?:** Routes to DM when `notify_dm: true` and a Discord user ID are present.
+- **Open Discord DM Channel:** Calls `POST /users/@me/channels`.
+- **Send Discord DM Alert / Send Discord Alert:** Sends a Discord embed to the selected destination.
+- **Debug pipeline:** `Get Debug Config` → `Prepare Debug Messages` → `Send Debug Messages` reports retailer success/failure and extracted product counts.
 
-### 2.2. Discord Slash Komut Yöneticisi (`jy2o6YTyzSqg4Amh`)
-- **`Discord Interactions Webhook`:**
-  - Discord Developer Portal'daki Interactions Endpoint URL'ini karşılar.
-- **`Parse Interaction`:**
-  - Discord'un zorunlu kıldığı **Ed25519 imza doğrulamasını** harici Node kütüphanesine bağımlı olmadan saf JavaScript (**TweetNaCl**) ile n8n Code düğümü içinde gerçekleştirir. Geçersiz imzalı istekleri 401 ile anında reddeder.
-  - Komut adını, parametrelerini ve buton tıklama etkileşimlerini (`custom_id`) ayrıştırır.
-- **Komut ve Buton Yönlendirme:**
-  - `/filtre-ekle`: Opsiyonel `dahil`, `haric`, `min_fiyat`, `max_fiyat`, `esik_yuzde`, `site` ve `dm` parametrelerini alır.
-  - `/filtre-sil`: Belirtilen ID'li kaydı `tracking_filters` tablosundan siler.
-  - `/filtre-listele`: Kayıtlı aktif filtreleri Discord embed formatında listeler.
-  - `/esik-guncelle`: Filtrenin indirim tetikleme yüzdesini günceller.
-  - `/en-ucuz`: Stoktaki en ucuz sistemleri artan fiyat sırasıyla listeler; 10'ar adetlik sayfalar halinde butonlu gezinti sunar (`enc_p:page:site:model`).
-  - `/debug`: Debug kanalını ve detaylı listeleme (`verbose`) durumunu ayarlar.
+### Discord command manager
 
----
+Export: `workflows/discord-slash-komut-yoneticisi.json`
+Original workflow ID: `jy2o6YTyzSqg4Amh`
 
-## 🕷️ 3. Site Ayrıştırma (Scraping) Mekanizmaları
+- **Discord Interactions Webhook:** Receives requests at the application's configured Interactions Endpoint URL.
+- **Parse Interaction:** Verifies Discord Ed25519 signatures using the pure JavaScript TweetNaCl implementation in the Code node, without an external Node library dependency. Invalid signatures receive HTTP 401. It also reads command options and button `custom_id` values.
+- **Command routing:** Inserts, lists, deletes, or updates filters; reads price history for cheapest-system results; and updates debug configuration.
 
-| Site | Ayrıştırma Tekniği | Detay |
-| :--- | :--- | :--- |
-| **PcKolik** | Next.js Server Components Gömülü JSON | HTML içerisindeki `\"systems\":[...]` veri yapısı doğrudan parse edilir. 301 sistemin tamamı gerçek ID, slug, donanım facet'leri ve sayısal fiyatıyla 0 gecikmeyle çekilir. Kartlar arası kayma ve karışma imkansız hale getirilmiştir. |
-| **İtopya** | Kapsamlı Sayfa (`?pg=40`) & DOM Ayrıştırma | `?pg=40` parametresi ile tek istekte 780+ ürün döner. `<div class="product">`, `<h2 class="eseoContainer">` ve `.product-price` etiketlerinden temiz başlık ve fiyat çekilir. |
-| **Gaming.gen.tr** | WooCommerce HTML & `.pc-specs-list` | Fiyat etiketindeki `translate="no"` ve `<ins>` esneklikleri desteklenir. İşlemci, anakart, GPU, RAM ve SSD bilgileri `.pc-specs-list` içinden okunup başlığa parantez içinde eklenir. |
-| **GameGaraj** | JSON-LD & Tailwind Kart Ayrıştırması | `<div class="w-full p-6 hover:scale-105">` kart konteyneri ve `li[data-name]` donanım listesinden işlemci, GPU, RAM ve SSD çıkarılır. Yedek olarak JSON-LD `ItemList` yapısı desteklenir. |
-| **Vatan Bilgisayar** | Sayfalı Kategori & URL Sanitizasyonu | `.product-list__content` konteynerinden ürünler çekilir. URL birleştirme sırasında oluşan `https://vatanbilgisayar.comhttps://...` mükerrer domain hatası engellenmiştir. |
-| **MediaMarkt** | JSON-LD `@type: ItemList` Ayrıştırması | MediaMarkt'ın sayfa başındaki JSON-LD şeması parse edilerek sayısal fiyat ve stok doğruluğu doğrudan ürün verisinden alınır. |
+| Command | Behavior |
+| --- | --- |
+| `/filtre-ekle` | Accepts optional `dahil`, `haric`, `min_fiyat`, `max_fiyat`, `esik_yuzde`, `site`, and `dm`. |
+| `/filtre-sil` | Deletes the specified filter ID from `tracking_filters`. |
+| `/filtre-listele` | Lists active filters as Discord embeds. |
+| `/esik-guncelle` | Updates the price-drop threshold. |
+| `/en-ucuz` | Lists in-stock systems by ascending price, with 10 results per page. Button IDs use `enc_p:page:site:model`. |
+| `/debug` | Configures the debug channel and verbose product listing. |
 
----
+Command and option identifiers remain in Turkish for compatibility.
 
-## 🎯 4. Filtreleme ve Eşleştirme Algoritması
+## Retailer extraction
 
-`Parse and Apply Filters` düğümünde çalışan `matchesFilter` fonksiyonunun temel kuralları:
+These mechanisms describe the documented implementation. Recheck actual HTTP responses before modifying a parser.
 
-1. **AND Mantığı:** Belirtilen dahil kelimeler virgül (`,`), artı (`+`) veya boşlukla ayrılabilir; belirtilen tüm kelimeler ürün başlığında geçmelidir.
-2. **Model Numarası Sınır Koruması (`\b`):**
+| Retailer | Method | Details |
+| --- | --- | --- |
+| PcKolik | Embedded Next.js Server Components JSON | Parses the embedded `"systems":[...]` structure for IDs, slugs, hardware facets, and numeric prices. Structured records avoid mixing fields between product cards. |
+| İtopya | Category HTML with `?pg=40` | Reads product containers, `h2.eseoContainer` titles, and `.product-price` values from a single comprehensive response. |
+| Gaming.gen.tr | WooCommerce HTML | Handles price markup including `translate="no"` and `ins`. Reads CPU, motherboard, GPU, RAM, and SSD details from `.pc-specs-list` and appends them to the title. |
+| GameGaraj | Product cards with JSON-LD fallback | Uses the `div.w-full.p-6.hover:scale-105` card markup and `li[data-name]` component lists. Supports JSON-LD `ItemList` as a fallback. |
+| Vatan Bilgisayar | Paginated category HTML | Extracts `.product-list__content` records. URL handling prevents duplicated origins when a product URL is already absolute. |
+| MediaMarkt | JSON-LD ItemList | Reads structured product prices and availability from the page's JSON-LD. |
+
+Respect robots.txt and avoid redundant pagination. Stop on bot-protection blocks instead of attempting a bypass.
+
+## Filtering
+
+The `matchesFilter` function in `Parse and Apply Filters` applies these rules:
+
+1. **AND matching:** Include keywords can be separated by commas, plus signs, or spaces. Every included term must match the product title.
+2. **Model boundaries:** A plain model number excludes suffixed variants such as Ti, Super, or XT.
+
    ```javascript
-   // Örneğin kullanıcı '5060' aradığında '5060 Ti' veya '5060 Super' modellerini hariç tutar:
+   // A search for "5060" excludes "5060 Ti" and "5060 Super".
    pattern = new RegExp('\\b' + inc + '\\b(?!\\s*(?:ti|super|xt))', 'i');
    ```
-3. **Donanım Son Ek Normalizasyonu:** `5060Ti`, `5070ti` veya `5080super` gibi bitişik yazımlar `5060 Ti` formatına açılarak kelime sınırı regex'inin kusursuz çalışması sağlanır.
-4. **Opsiyonel Dahil Kelime (Genel Takip):** `include_keywords` boş bırakıldığında filtre tüm sistemleri kabul eder ve genel indirim takibi yapar.
-5. **Hariç Tutma:** `exclude_keywords` içindeki herhangi bir kelime başlıkta varsa ürün elenir.
-6. **Fiyat Sınırları:** `min_price` ve `max_price` aralığında olmayan ürünler elenir.
 
----
+3. **Suffix normalization:** Joined forms such as `5060Ti`, `5070ti`, and `5080super` are normalized before matching.
+4. **Optional include keywords:** An empty `include_keywords` value accepts all systems that satisfy the remaining constraints.
+5. **Exclusions:** A matching term in `exclude_keywords` rejects the product.
+6. **Price limits:** Products outside `min_price` and `max_price` are rejected.
 
-## 🛡️ 5. Güvenlik, Sahte İndirim & DM Bildirim Mantığı
+## Alert safeguards
 
-`Compare and Detect Drops` düğümünde uygulanan koruma katmanları:
+- **Baseline reset:** A substantial product-name change, such as `DK Gaming` becoming `Cure OEM`, invalidates the old comparison. Setting `previousPrice = currentPrice` prevents a false drop while establishing a fresh baseline.
+- **Stock guard:** Products with `in_stock: false` never generate a price-drop notification.
+- **DM routing:** When the filter specifies `dm: true`, the workflow opens a DM channel using `discord_user_id` and sends the embed there instead of the shared channel.
+- **Secret handling:** Supply bot authentication through n8n credentials. Never store real tokens or public-key configuration in committed workflow exports or logs.
 
-- **Anti-False Drop Baseline Koruması:**
-  - Bir ürünün eski adı ile yeni adı kökten farklıysa (örn. `DK Gaming` vs `Cure OEM`), bu durum sistemin geçmişteki hatalı bir kaydı düzelttiği anlamına gelir. Sistem bunu indirim saymaz, `previousPrice = currentPrice` eşitleyerek sahte bildirimi engeller.
-- **Stoksuz Ürün Koruması:**
-  - Fiyatı düşmüş olsa dahi stokta olmayan (`in_stock: false`) ürünler için indirim bildirimi üretilmez.
-- **Kanal ve DM Bildirim Yönlendirmesi:**
-  - Kullanıcı filtreyi eklerken `dm: true` seçmişse:
-    1. Bildirim genel kanala gönderilmez.
-    2. Kullanıcının Discord ID'si (`discord_user_id`) kullanılarak Discord API'si üzerinden özel mesaj kanalı oluşturulur (`POST /users/@me/channels`).
-    3. Özel indirim embed'i yalnızca ilgili kullanıcının DM kutusuna gönderilir.
+## Data Tables
 
----
+### tracking_filters
 
-## 📊 6. n8n Data Table Veri Modelleri
+Original table ID: `qY8ZHyILWEQvZ1Mk`
 
-### 6.1. `tracking_filters` (`qY8ZHyILWEQvZ1Mk`)
-| Kolon Adı | Veri Tipi | Açıklama |
-| :--- | :--- | :--- |
-| `id` | Number | Otomatik artan tekil filtre ID'si |
-| `include_keywords` | String | Dahil edilecek anahtar kelimeler (boş ise Genel Takip) |
-| `exclude_keywords` | String | Hariç tutulacak kelimeler |
-| `min_price` | Number | Minimum filtre fiyatı |
-| `max_price` | Number | Maksimum filtre fiyatı |
-| `drop_threshold_percent` | Number | İndirim bildirim eşiği (Varsayılan: %5) |
-| `source_site` | String | Takip edilecek site (`all`, `gaming_gen_tr`, `itopya` vb.) |
-| `is_active` | Boolean | Filtrenin aktiflik durumu |
-| `notify_dm` | Boolean | Bildirimin DM olarak iletilip iletilmeyeceği |
-| `discord_user_id` | String | Filtreyi ekleyen kullanıcının Discord ID'si |
-| `created_at` | DateTime | Eklenme tarihi |
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | Number | Unique, automatically incremented filter ID |
+| `include_keywords` | String | Required terms; empty means general tracking |
+| `exclude_keywords` | String | Terms that reject a product |
+| `min_price` | Number | Minimum price |
+| `max_price` | Number | Maximum price |
+| `drop_threshold_percent` | Number | Alert threshold; default 5% |
+| `source_site` | String | Retailer selector, such as `all`, `gaming_gen_tr`, or `itopya` |
+| `is_active` | Boolean | Whether the filter is enabled |
+| `notify_dm` | Boolean | Whether alerts go to a DM |
+| `discord_user_id` | String | Discord ID of the filter owner |
+| `created_at` | DateTime | Creation time |
 
-### 6.2. `price_history` (`MZ5jUhvyTbqRUOdk`)
-| Kolon Adı | Veri Tipi | Açıklama |
-| :--- | :--- | :--- |
-| `product_id` | String | Site önekli tekil ID (Örn: `pckolik_PC1072`, `itopya_35805`) |
-| `source_site` | String | Kaynak site adı |
-| `product_name` | String | Ürünün tam ve normalize edilmiş başlığı |
-| `product_url` | String | Ürünün doğrudan satın alma linki |
-| `current_price` | Number | En son taranan güncel fiyat |
-| `previous_price` | Number | Bir önceki taramadaki fiyat |
-| `in_stock` | Boolean | Stok durumu |
-| `last_checked_at` | DateTime | Son kontrol zaman damgası |
+### price_history
 
-### 6.3. `debug_config` (`wru3e3nz0vOoJC2v`)
-| Kolon Adı | Veri Tipi | Açıklama |
-| :--- | :--- | :--- |
-| `id` | Number | Yapılandırma ID'si (1) |
-| `channel_id` | String | Debug raporlarının gönderileceği Discord kanal ID'si |
-| `verbose` | Boolean | Detaylı sistem listelemesinin açık olup olmadığı |
-| `is_active` | Boolean | Debug modunun aktifliği |
-| `updated_at` | DateTime | Son güncelleme zamanı |
+Original table ID: `MZ5jUhvyTbqRUOdk`
 
----
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `product_id` | String | Retailer-prefixed unique ID, e.g. `pckolik_PC1072` or `itopya_35805` |
+| `source_site` | String | Source retailer |
+| `product_name` | String | Full normalized product title |
+| `product_url` | String | Direct product URL |
+| `current_price` | Number | Latest observed price |
+| `previous_price` | Number | Price from the preceding scan |
+| `in_stock` | Boolean | Stock availability |
+| `last_checked_at` | DateTime | Last check time |
 
-## 📈 7. Sistem Başarı Metrikleri
+### debug_config
 
-En son canlı çalıştırma (Execution ID: `3012`) itibarıyla elde edilen metrikler:
-- **Gaming.gen.tr:** 13 sayfa (**203 sistem**)
-- **GameGaraj:** 4 sayfa (**92 sistem**)
-- **İtopya:** 1 sayfa (**787 sistem**)
-- **PcKolik:** 1 sayfa (**303 sistem**)
-- **Vatan Bilgisayar:** 10 sayfa (**113 sistem**)
-- **MediaMarkt:** 3 sayfa (**25 sistem**)
-- **Toplam Taranan Canlı Sistem:** **1.523 adet**
-- **Ortalama Tarama Süresi:** ~26 saniye
-- **Hatalı Bildirim Oranı:** %0
+Original table ID: `wru3e3nz0vOoJC2v`
 
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | Number | Configuration ID (1) |
+| `channel_id` | String | Discord channel for debug reports |
+| `verbose` | Boolean | Whether detailed product listings are enabled |
+| `is_active` | Boolean | Whether debug mode is enabled |
+| `updated_at` | DateTime | Last update time |
+
+## Historical scan results
+
+The previous documentation recorded these results for execution `3012`. They were not rerun during the documentation translation and do not establish current retailer availability or coverage.
+
+| Retailer | Pages | Systems |
+| --- | ---: | ---: |
+| Gaming.gen.tr | 13 | 203 |
+| GameGaraj | 4 | 92 |
+| İtopya | 1 | 787 |
+| PcKolik | 1 | 303 |
+| Vatan Bilgisayar | 10 | 113 |
+| MediaMarkt | 3 | 25 |
+| Total | 32 | 1,523 |
+
+The previous report recorded approximately 26 seconds per scan and a 0% false-notification rate. These are historical observations, not a guarantee.
+
+## Change management
+
+Review recent Git history at the start of every chat. Keep the English and Turkish READMEs and this technical reference current when behavior changes. Before committing any changes made in n8n, export the affected workflows to `./workflows/` and verify that no secrets are included. Follow the user-feedback and commit rules in [AGENTS.md](./AGENTS.md).

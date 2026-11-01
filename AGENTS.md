@@ -1,55 +1,49 @@
-# AGENTS.md
+# Agent instructions
 
-Bu dosya, bu projede çalışan AI agent'lar için genel kurallar, mimari prensipler ve çalışma sınırlarıdır. 
-Teknik detaylar, workflow yapıları, veri modelleri ve kod implementasyonu için [IMPLEMENTATION.md](./IMPLEMENTATION.md) dosyasına başvurun.
+This file defines project rules, architectural principles, and working boundaries for AI agents. See [IMPLEMENTATION.md](./IMPLEMENTATION.md) for workflow details, data models, and implementation notes.
 
----
+## Project overview
 
-## 📌 Proje Özeti
+This n8n automation periodically scans prebuilt PC prices from Turkish retailers, including Gaming.gen.tr, GameGaraj, İtopya, PcKolik, Vatan Bilgisayar, and MediaMarkt. It sends Discord channel or DM notifications when a system matching a user's filters drops in price.
 
-Türkiye'nin popüler donanım sitelerinden (Gaming.gen.tr, GameGaraj, İtopya, PcKolik, Vatan Bilgisayar, MediaMarkt vb.) hazır sistem fiyatlarını periyodik olarak tarayıp, kullanıcının belirlediği filtrelere uyan sistemlerde fiyat düşüşü olduğunda Discord üzerinden (kanala veya özel DM ile) bildirim gönderen n8n tabanlı bir otomasyon sistemidir.
+Example: "Track systems with a 5060 and notify me when the price drops by 5%."
 
-Örnek kullanım: *"Sadece 5060 içeren sistemleri takip et, fiyat %5 düşerse haber ver."*
+These retailers do not provide a general public API for this project. Data is extracted from embedded JSON, Next.js data, JSON-LD, or page HTML.
 
-Bu sitelerin genel bir açık API'si bulunmamaktadır; veri sitelerin gömülü veri yapılarından (JSON/Next.js/JSON-LD) veya sayfa HTML'inden çekilir.
+## Architecture
 
----
+- **Execution and scheduling:** n8n workflows handle scheduling, fetching, parsing, comparison, and notifications.
+- **Extraction priority:** Prefer embedded structured data, then HTML parsing. Browser automation is a last resort.
+- **Dynamic management:** Discord slash commands add, remove, list, and update tracking filters.
+- **Persistence:** Store filters and price history in n8n Data Tables.
 
-## 🏛️ Genel Mimari Yaklaşım
+## Security and privacy
 
-- **Yürütme & Zamanlama:** Zamanlama, veri çekme, parse, fiyat karşılaştırma ve bildirim gönderimi n8n workflow'ları ile yürütülür.
-- **Veri Çekme Önceliği:** Mümkünse öncelikle sitelerin kendi gömülü veri kaynağı (Next.js RSC, JSON-LD, dahili JSON) tercih edilir; sayfa DOM ayrıştırması ikinci seçenek, tarayıcı otomasyonu son çaredir.
-- **Dinamik Yönetim:** Takip filtreleri Discord Slash komutları üzerinden dinamik olarak yönetilir (ekle, sil, listele, eşik değiştir).
-- **Kalıcı Depolama:** Fiyat geçmişi ve filtreler n8n Data Table üzerinde tutulur.
+- **Never expose secrets:** Tokens, webhook URLs, API keys, Discord public keys, and private credentials must not appear in workflow JSON files, the Git repository, or logs.
+- **Untrusted input:** Sanitize and constrain Discord command parameters.
+- **Git protection:** Keep `bilgiler.txt`, `.env`, `.agents/`, and any file containing tokens ignored by Git. Never push them to a remote repository.
 
----
+## Working rules
 
-## 🛡️ Güvenlik ve Gizlilik Kuralları (Kritik)
+1. **Verify before assuming:** Inspect real HTTP responses before relying on page structures or field names. State clearly when verification is unavailable.
+2. **Scrape respectfully:** Add delays where needed, avoid redundant pagination, and obey robots.txt. Do not request multiple pages when one response already contains the complete listing.
+3. **Respect bot protection:** Stop and report Cloudflare or other bot-protection blocks. Do not attempt to bypass them or pressure the site; suggest alternatives.
+4. **Make failures visible:** Report parsing failures, including unexpected zero-product results, through debug notifications and error paths.
+5. **Keep alerts accurate:** Products with `in_stock: false` must not trigger price-drop alerts. Never fabricate a price drop.
+6. **Handle live changes carefully:** Verify workflow changes in a test environment or manual execution. Do not delete user filters or price history without asking.
+7. **Keep documentation current:** New features, commands, retailers, parameters, or data models must be reflected in `README.md`, `README_TR.md`, and `IMPLEMENTATION.md` where relevant. Development is incomplete if its documentation is missing or outdated.
+8. **Obtain feedback before committing:** Explain code, workflow, and documentation changes to the user and wait for feedback or approval before creating a Git commit. Do not commit without user feedback or approval.
+9. **Export n8n changes before committing:** Before every Git commit, check whether this project's workflows have changed in n8n. If so, export the latest versions of the affected workflows to `./workflows/`. Verify that the exports contain no secrets and include them with the relevant changes. Do not commit before the required exports are complete.
+10. **Review Git history at the start of every chat:** Before beginning project work, review recent commit messages and relevant diffs to understand the latest project state.
 
-- **Sırlar Asla Kodda Bulunamaz:** Token, webhook adresi, API anahtarı, Discord Public Key veya özel kimlik bilgileri workflow JSON dosyalarına, git reposuna veya loglara yazılmaz.
-- **Kullanıcı Girdisi:** Kullanıcıdan gelen Discord komut parametreleri güvenilmez kabul edilir; sanitize edilir ve sınırlandırılır.
-- **Git Koruma:** `bilgiler.txt`, `.env`, `.agents/` ve token içeren tüm dosyalar `.gitignore` kapsamındadır ve hiçbir koşulda uzak repoya pushlanamaz.
+## Completion criteria
 
----
+Apply the runtime checks below when the task changes the corresponding behavior.
 
-## 🤖 AI Agent Çalışma ve Davranış İlkeleri
-
-1. **Doğrulamadan Varsayım Yapma:** Sayfa yapısı veya alan adlarını tahmin etme; gerçek HTTP yanıtını inceleyip doğrula. Doğrulayamadıysan bunu açıkça belirt.
-2. **Sitelere Saygılı Tarama:** İstekler arasına gerektiğinde gecikme koy, gereksiz sayfa yinelemelerinden kaçın (örneğin tüm veriyi ilk sayfada veren PcKolik veya Itopya'da gereksiz 13 sayfa taraması yapma), robots.txt kurallarına uy.
-3. **Bot Koruması:** Bot koruması veya Cloudflare engeli ile karşılaşırsan atlatmaya çalışıp siteyi zorlama. Dur, durumu bildir, alternatif öner.
-4. **Hatalarda Sessiz Kalma:** Sayfa yapısı değişir ve parse bozulursa (0 ürün çekilmesi vb.) durumu gizleme; debug bildirimleri ve hata yolları ile durumu görünür kıl.
-5. **Stok ve İndirim Dürüstlüğü:** Stokta olmayan (`in_stock: false`) bir ürün indirim sayılmaz. Gerçek bir fiyat düşüşü yoksa sahte bildirim üretilemez.
-6. **Canlı Workflow Değişiklikleri:** Canlı workflow'lara dokunurken dikkatli ol, test ortamında veya manual execution ile doğrula. Kullanıcının filtre ve fiyat geçmişini sormadan silme.
-7. **Dokümantasyon Güncelliği (Zorunlu):** Sisteme yeni bir özellik, komut, site, parametre veya veri modeli eklendiğinde; ilgili dokümantasyon dosyalarında (`README.md`, `IMPLEMENTATION.md`) bu yenilik eksikse veya güncel değilse mutlaka güncellenmelidir. Eksik dokümantasyonlu geliştirme tamamlanmış sayılmaz.
-8. **Commit Öncesi Kullanıcı Feedback'i:** Yapılan kod, workflow veya dokümantasyon değişiklikleri için Git commit'i atılmadan önce kullanıcıya yapılan değişiklikler açıklanmalı ve kullanıcının geri bildirimi / onayı beklenmelidir. Kullanıcıdan onay veya feedback alınmadan commit atılamaz.
-
----
-
-## 📋 Bir Görevin "Bitti" Sayılması İçin Kriterler
-
-1. Gerçek siteler üzerinde veri çekmenin çalıştığı execution çıktısıyla gösterildi.
-2. Filtreler olumlu ve olumsuz örneklerle test edildi (örn: `"5060"` eşleşir, `"5060 Ti"` eşleşmez).
-3. Hatalı veya değişen ürünlerde sahte indirim üretilmediği doğrulandı.
-4. Dosyalarda ve export edilen workflow'larda hiçbir gizli bilgi kalmadı.
-5. Eklenen yeni özellikler ve mimari değişiklikler [IMPLEMENTATION.md](./IMPLEMENTATION.md) ve [README.md](./README.md) dosyalarına işlendi.
-6. Değişiklikler kullanıcıya sunuldu ve commit öncesinde kullanıcının feedback'i / onayı alındı.
+1. Demonstrate real-site extraction using execution output.
+2. Test positive and negative filter cases, such as matching `5060` while excluding `5060 Ti`.
+3. Verify that invalid or changed products do not generate false price-drop alerts.
+4. Ensure that files and exported workflows contain no secrets.
+5. Document new features and architectural changes in [IMPLEMENTATION.md](./IMPLEMENTATION.md), [README.md](./README.md), and [README_TR.md](./README_TR.md).
+6. Present changes to the user and obtain feedback or approval before committing.
+7. If workflows changed in n8n, save current exports to `./workflows/` and verify that they contain no secrets.
