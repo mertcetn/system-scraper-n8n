@@ -16,6 +16,23 @@ For example, track systems containing `5060` and receive an alert when the price
 
 Out-of-stock products do not trigger alerts. A substantial product-name change resets the comparison baseline to avoid treating a different product as a price drop.
 
+## Price history graphs
+
+Each `/ara` result has a numbered **Bilgi** button. Click it to open a public graph message, initially showing **1 week**. Use the **1 Hafta / 1 Ay / 1 Yıl / Max** buttons beneath the graph to switch periods in the same message. Everyone who can see the message can change its selected period.
+
+| Graph | Stored price points |
+| --- | --- |
+| 1 week | The lowest in-stock price for each day |
+| 1 month | The lowest in-stock price for each week |
+| 1 year | The lowest in-stock price for each month |
+| Max | All recorded monthly minimum prices |
+
+Each graph shows the period's lowest price and the day it was observed underneath the plot. Repeated observations retain only the minimum; ties retain the earliest observation date. Dates use Europe/Istanbul, and weeks start on Monday. Missing observations remain gaps.
+
+The chart uses a dark card, a turquoise price line with subtle area shading, antialiased Segoe UI text, and a separate minimum-price/date panel. Only one graph is displayed at a time, and the active period button is highlighted. Font glyphs are embedded, so the n8n server does not need a font installation or a GPU.
+
+History starts from actual recorded observations. Existing products can be initialized from their latest saved price and timestamp; earlier prices cannot be reconstructed. Graph PNGs are generated locally in n8n, without an external chart service.
+
 ## Supported retailers
 
 | Retailer | Extraction method |
@@ -56,7 +73,11 @@ Run `node tests/search-command.cjs` to verify search behavior against the export
 system-scraper-n8n/
 ├── workflows/
 │   ├── donanim-fiyat-takipcisi.json
-│   └── discord-slash-komut-yoneticisi.json
+│   ├── discord-slash-komut-yoneticisi.json
+│   ├── render-price-history-chart.json
+│   └── initialize-price-graph-history.json
+├── lib/                  # Shared history and local PNG rendering code
+├── tests/                # Workflow and graph regression checks
 ├── AGENTS.md             # Contributor and AI agent rules
 ├── IMPLEMENTATION.md     # Architecture, parsing, and table schemas
 ├── README.md             # English overview and setup
@@ -70,13 +91,17 @@ system-scraper-n8n/
 In n8n, create a workflow and choose **Import from File** for each JSON file in [workflows/](./workflows/):
 
 - `donanim-fiyat-takipcisi.json`: scheduled scraping, price comparison, and notifications.
-- `discord-slash-komut-yoneticisi.json`: Discord interactions and filter management.
+- `discord-slash-komut-yoneticisi.json`: Discord interactions, filter management, and graph information buttons.
+- `render-price-history-chart.json`: public PNG endpoint used by Discord to display graphs.
+- `initialize-price-graph-history.json`: optional manual initialization of missing graph history from existing prices. It has no schedule and sends no alerts.
 
 Keep the workflows inactive until configuration and manual checks are complete.
 
 ### 2. Create and connect the Data Tables
 
 Create `tracking_filters`, `price_history`, and `debug_config` using the column definitions in [IMPLEMENTATION.md](./IMPLEMENTATION.md#data-tables). Select your own tables in the imported Data Table nodes; IDs from another n8n instance are not portable.
+
+For an existing installation, add the string column `chart_history` to `price_history`. Activate the renderer workflow and replace `YOUR_PRICE_CHART_ENDPOINT` in `Format Graph Info` with its verified production URL. The static webhook path is `/webhook/price-history-chart`; check it with an HTTP request after import. Run the initialization workflow once if you want to seed missing graphs from existing observations. It changes only `chart_history` and skips rows that are already initialized. Monthly history is retained indefinitely, so monitor Data Table storage as the catalog grows.
 
 ### 3. Configure Discord
 
@@ -98,3 +123,14 @@ Respect retailer robots.txt rules and avoid unnecessary requests. Stop and repor
 Keep tokens, webhook secrets, and local configuration out of Git. After changing a live project workflow, export its latest version to `workflows/` and check it for secrets before committing.
 
 See [AGENTS.md](./AGENTS.md) for contribution rules and [IMPLEMENTATION.md](./IMPLEMENTATION.md) for technical details.
+
+Regression checks:
+
+```sh
+node tests/search-command.cjs
+node tests/price-graphs.cjs
+node tests/chart-png.cjs
+node tests/graph-workflows.cjs
+```
+
+To measure local rendering cost, run `node --expose-gc scripts/benchmark-chart.cjs` (20 samples per period) or add `--single` for a fresh-process measurement. These measurements do not include the n8n server's own process, task runner, or database overhead.

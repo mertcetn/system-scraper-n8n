@@ -104,3 +104,33 @@ Yukarıdaki ürün sayıları geçmiş taramalara ait yaklaşık değerlerdir ve
 - `/ara model:5060 siralama:En pahalı`: eşleşen sistemleri en pahalıdan başlayarak listeler.
 
 Discord komut tanımı [discord/ara.command.json](./discord/ara.command.json) dosyasındadır. `siralama` alanının API değerleri `en_ucuz` ve `en_pahali` olarak tanımlıdır. Başka bir kurulumda workflow ile birlikte Discord komut kaydı da güncellenmelidir. Uzun ürün adları listede kısaltılır; ürün bağlantıları korunur. Arama testleri: `node tests/search-command.cjs`.
+
+## Fiyat Geçmişi Grafikleri
+
+`/ara` sonuçlarında her sistem için numaralı **Bilgi** butonu bulunur. Basıldığında herkesin görebildiği bir grafik mesajı açılır; başlangıçta **1 hafta** seçilidir. Grafiğin altındaki **1 Hafta / 1 Ay / 1 Yıl / Max** butonları aynı mesajın grafiğini günceller. Mesajı gören kullanıcılar dönem seçimini değiştirebilir; seçili buton vurgulanır. Aynı anda yalnızca bir grafik gösterilir.
+
+| Grafik | Saklanan fiyatlar |
+| --- | --- |
+| 1 hafta | Her günün stokta görülen en düşük fiyatı |
+| 1 ay | Her haftanın stokta görülen en düşük fiyatı |
+| 1 yıl | Her ayın stokta görülen en düşük fiyatı |
+| Max | Kaydedilen tüm aylık minimum fiyatlar |
+
+Her grafiğin altında ilgili dönemin en düşük fiyatı ve görüldüğü gün yazılır. Aynı dönem içindeki diğer fiyatlar saklanmaz. Minimum birden fazla gün görülürse ilk gözlem günü korunur. Tarihler İstanbul saatine göre hesaplanır; haftalar pazartesi başlar. Gözlem olmayan günler boş bırakılır; geçmiş fiyatlar uydurulmaz.
+
+Grafik koyu kart zemini, turkuaz fiyat çizgisi, hafif alan dolgusu, kenar yumuşatmalı Segoe UI fontu ve ayrı minimum fiyat/tarih paneli kullanır. Harf şekilleri gömülüdür; sunucuda font kurulumu veya GPU gerekmez.
+
+Günlük noktalar son 7 gün, haftalık noktalar son 30 günle kesişen takvim haftaları için tutulur. Yıllık grafik son 12 takvim ayını, Max tüm aylık kayıtları gösterir. Aylık geçmiş süresiz saklanır; büyüyen kataloglarda Data Table kapasitesi izlenmelidir. Ürün kimliği değiştiğinde eski aylık seri arşivlenir ve yeni ürünün grafiğine karıştırılmaz.
+
+Grafikler PNG olarak n8n içinde üretilir; dış grafik servisine veri gönderilmez. Discord'un görselleri alabilmesi için grafik endpoint'i herkese açık fiyat verisini sunar.
+
+### Mevcut Kuruluma Ekleme
+
+1. `price_history` tablosuna string tipinde `chart_history` kolonu ekleyin.
+2. Ana iki workflow'un güncel export'larını ve `render-price-history-chart.json` dosyasını içe aktarın; Data Table bağlantılarını kendi tablolarınıza yönlendirin.
+3. Grafik workflow'unu etkinleştirin. `Format Graph Info` düğümündeki `YOUR_PRICE_CHART_ENDPOINT` yer tutucusunu doğrulanmış üretim adresiyle değiştirin. Statik webhook yolu `/webhook/price-history-chart` şeklindedir.
+4. İsteğe bağlı `initialize-price-graph-history.json` workflow'unu manuel çalıştırarak mevcut ürünlerin son gerçek fiyatı ve kontrol zamanını başlangıç kaydı olarak aktarın. Yalnızca boş `chart_history` alanları doldurulur; mevcut fiyat ve filtreler değiştirilmez. Bu workflow zamanlanmaz ve bildirim göndermez.
+
+Testler: `node tests/search-command.cjs`, `node tests/price-graphs.cjs`, `node tests/chart-png.cjs`, `node tests/graph-workflows.cjs`.
+
+Kaynak kullanımını yerelde ölçmek için `node --expose-gc scripts/benchmark-chart.cjs` komutunu çalıştırın; tek yeni süreç ölçümü için `--single` ekleyin. Bu ölçüm n8n sunucusunun, task runner'ın veya veritabanının toplam bellek maliyeti değildir. Görsel üretimi grafik istendiğinde çalışır; saatlik taramada görsel üretilmez. Ölçüm ayrıntıları [IMPLEMENTATION.md](./IMPLEMENTATION.md) dosyasındadır.

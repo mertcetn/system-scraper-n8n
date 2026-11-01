@@ -1,0 +1,142 @@
+{
+  "id": "RaNbbuEp9PU2lr7s",
+  "name": "Initialize Price Graph History",
+  "active": false,
+  "isArchived": false,
+  "versionId": "f9049937-6dff-4ea0-a80f-f925bf9ab248",
+  "activeVersionId": null,
+  "triggerCount": 0,
+  "createdAt": "2026-11-01T12:28:34.766Z",
+  "updatedAt": "2026-11-01T12:28:34.766Z",
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "connections": {
+    "Initialize Manually": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Prices": {
+      "main": [
+        [
+          {
+            "node": "Prepare Initial Graph History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Initial Graph History": {
+      "main": [
+        [
+          {
+            "node": "Save Initial Graph History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodes": [
+    {
+      "id": "3b3f5766-75ff-4efb-832b-1e8f46790475",
+      "name": "Initialize Manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "273b0ef2-588b-4195-bd90-b9c23056aec6",
+      "name": "Read Existing Prices",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "MZ5jUhvyTbqRUOdk"
+        },
+        "returnAll": true
+      }
+    },
+    {
+      "id": "c0fb6ed0-dd57-48e9-8b1e-f27075cab89f",
+      "name": "Prepare Initial Graph History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const GRAPH_DAY = 86400000;\nfunction graphLocalDay(value) {\n  const time = new Date(value).getTime();\n  if (!Number.isFinite(time)) throw new Error('Invalid graph observation timestamp');\n  return new Date(time + 3 * 3600000).toISOString().slice(0, 10);\n}\nfunction graphWeek(day) {\n  const date = new Date(day + 'T00:00:00Z');\n  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);\n  return date.toISOString().slice(0, 10);\n}\nfunction graphDayShift(day, amount) {\n  return new Date(new Date(day + 'T00:00:00Z').getTime() + amount * GRAPH_DAY).toISOString().slice(0, 10);\n}\nfunction readGraphHistory(raw) {\n  if (!raw) return {version: 1, daily: [], weekly: [], monthly: []};\n  const history = typeof raw === 'string' ? JSON.parse(raw) : raw;\n  if (history.version !== 1 || !['daily', 'weekly', 'monthly'].every(key => Array.isArray(history[key]))) {\n    throw new Error('Invalid stored chart_history');\n  }\n  for (const key of ['daily', 'weekly', 'monthly']) {\n    for (const point of history[key]) {\n      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(point.day) || !Number.isFinite(point.price) || point.price <= 0 || !Number.isFinite(Date.parse(point.observed_at))) {\n        throw new Error('Invalid stored price point');\n      }\n    }\n  }\n  return JSON.parse(JSON.stringify(history));\n}\nfunction addGraphObservation(raw, product, timestamp, reset = false) {\n  const previous = readGraphHistory(raw);\n  const history = reset ? readGraphHistory(null) : previous;\n  if (reset && previous.monthly.length) {\n    history.archived = [...(previous.archived || []), {monthly: previous.monthly}];\n  }\n  const day = graphLocalDay(timestamp);\n  const week = graphWeek(day);\n  const month = day.slice(0, 7) + '-01';\n  history.daily = history.daily.filter(point => point.day >= graphDayShift(day, -6));\n  history.weekly = history.weekly.filter(point => point.day >= graphWeek(graphDayShift(day, -30)));\n  const price = Number(product.current_price);\n  if (product.in_stock === true && Number.isFinite(price) && price > 0) {\n    for (const [key, bucket] of [['daily', day], ['weekly', week], ['monthly', month]]) {\n      const existing = history[key].find(point => point.day === bucket);\n      const rounded = Math.round(price * 100) / 100;\n      if (existing && (rounded < existing.price || (rounded === existing.price && timestamp < existing.observed_at))) {\n        existing.price = rounded;\n        existing.observed_at = timestamp;\n      } else if (!existing) history[key].push({day: bucket, price: rounded, observed_at: timestamp});\n      history[key].sort((a, b) => a.day.localeCompare(b.day));\n    }\n  }\n  return JSON.stringify(history);\n}\nfunction graphSeries(raw, period, timestamp) {\n  const history = readGraphHistory(raw);\n  const today = graphLocalDay(timestamp);\n  let buckets;\n  let points;\n  if (period === 'week') {\n    buckets = Array.from({length: 7}, (_, i) => graphDayShift(today, i - 6));\n    points = history.daily;\n  } else if (period === 'month') {\n    const start = graphWeek(graphDayShift(today, -30));\n    buckets = [];\n    for (let day = start; day <= today; day = graphDayShift(day, 7)) buckets.push(day);\n    points = history.weekly;\n  } else if (period === 'year' || period === 'max') {\n    const first = period === 'year'\n      ? new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 12, 1)).toISOString().slice(0, 10)\n      : (history.monthly[0]?.day || today.slice(0, 7) + '-01');\n    buckets = [];\n    for (let day = first; day <= today;) {\n      buckets.push(day);\n      const date = new Date(day + 'T00:00:00Z');\n      date.setUTCMonth(date.getUTCMonth() + 1);\n      day = date.toISOString().slice(0, 10);\n    }\n    points = history.monthly;\n  } else throw new Error('Invalid graph period');\n  const byDay = new Map(points.map(point => [point.day, point.price]));\n  const included = points.filter(point => buckets.includes(point.day));\n  const minimum = included.slice().sort((a, b) => a.price - b.price || a.observed_at.localeCompare(b.observed_at))[0] || null;\n  return {labels: buckets.map(day => period === 'week' || period === 'month' ? day : day.slice(0, 7)), values: buckets.map(day => byDay.get(day) ?? null), minimum};\n}\nfunction priceChartConfig(raw, period, timestamp) {\n  const series = graphSeries(raw, period, timestamp);\n  const titles = {week: '1 Hafta · Günlük En Düşük Fiyat', month: '1 Ay · Haftalık En Düşük Fiyat', year: '1 Yıl · Aylık En Düşük Fiyat', max: 'Max · Aylık En Düşük Fiyat'};\n  const caption = series.minimum ? 'En düşük: ' + series.minimum.price.toLocaleString('tr-TR') + ' TL · ' + graphLocalDay(series.minimum.observed_at) : 'Bu dönem için kayıtlı fiyat yok';\n  return {type: 'line', data: {labels: series.labels, datasets: [{label: 'En düşük fiyat (TL)', data: series.values, borderColor: '#4f8cff', backgroundColor: '#4f8cff', fill: false, tension: 0, spanGaps: false, pointRadius: 4}]}, options: {plugins: {title: {display: true, text: titles[period]}, subtitle: {display: true, position: 'bottom', text: caption, padding: 12}, legend: {display: false}}, scales: {y: {beginAtZero: false, title: {display: true, text: 'TL'}}}}};\n}\n\n\r\n\nconst output=[];\nfor (const item of $input.all()) {\n const row=item.json;\n if (row.chart_history || !row.last_checked_at || row.in_stock !== true || !(Number(row.current_price)>0)) continue;\n output.push({json:{id:row.id,chart_history:addGraphObservation(null,row,row.last_checked_at)}});\n}\nreturn output;"
+      },
+      "notes": "Why Code: build multi-resolution minima without fabricating historical observations; skip already initialized rows."
+    },
+    {
+      "id": "385ad6f8-2978-49bf-b3b2-82f30a4fcbd5",
+      "name": "Save Initial Graph History",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "MZ5jUhvyTbqRUOdk"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chart_history": "={{ $json.chart_history }}"
+          }
+        },
+        "options": {}
+      }
+    }
+  ],
+  "nodeGroups": [],
+  "activeVersion": null,
+  "tags": [],
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "parentFolderId": null,
+  "description": "Manual, idempotent migration: initialize only missing chart_history from each in-stock product's actual latest price and observation timestamp. Updates chart_history only; no Discord sends or fabricated past prices."
+}

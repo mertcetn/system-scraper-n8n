@@ -4,7 +4,7 @@ Technical reference for the n8n workflows, retailer parsers, filtering rules, an
 
 ## Architecture
 
-Two workflows share three n8n Data Tables.
+Two main workflows share three n8n Data Tables. A separate renderer workflow serves graph PNGs, and an optional manual initialization workflow seeds missing graph history from existing observations.
 
 ```mermaid
 flowchart TD
@@ -142,6 +142,7 @@ Original table ID: `MZ5jUhvyTbqRUOdk`
 | `previous_price` | Number | Price from the preceding scan |
 | `in_stock` | Boolean | Stock availability |
 | `last_checked_at` | DateTime | Last check time |
+| `chart_history` | String | Versioned JSON containing daily, weekly, and monthly price minima and their actual observation timestamps |
 
 ### debug_config
 
@@ -186,3 +187,53 @@ New search buttons use `ara_p:page:site:sort:model`, preserving filters and orde
 Run `node tests/search-command.cjs` to check ascending and descending results, default and invalid sorting, model boundaries, retailer filtering, out-of-stock exclusion, next/previous navigation, legacy buttons, empty results, and debug routing.
 
 Manual n8n executions: `3168` verified descending results against stored price history; `3169` verified the default order with model 5060 and PcKolik (56 matches); `3170` verified descending page-two navigation; `3171` verified shortened product names (3,483-character description). These tests read existing data and return webhook responses; they do not perform a fresh retailer scrape or send channel/DM alerts.
+
+## Price graph storage and rendering
+
+### Storage contract
+
+`price_history.chart_history` contains JSON with `version: 1`, `daily`, `weekly`, and `monthly` arrays. Each point has:
+
+```json
+{"day":"2026-11-01","price":52199,"observed_at":"2026-11-01T12:00:00.000Z"}
+```
+
+`day` identifies the bucket: the local observation day, the Monday of its week, or the first day of its month. `observed_at` identifies when the minimum was actually observed; bucket start dates must never be presented as observation dates. Prices are rounded to two decimal places. A lower observed price replaces the bucket minimum; equal prices keep the earliest timestamp. Other observations are discarded. Out-of-stock, zero, negative, and non-finite prices do not create points.
+
+`lib/price-graphs.js` implements these rules and is embedded in the relevant Code nodes. A parity test checks that exported nodes contain the same helper implementation. `Compare and Detect Drops` updates graph history alongside the existing notification comparison. `Update Price History` persists the added column through its existing upsert. Repeated products within one execution share accumulated minima. Notification thresholds and destinations are unchanged.
+
+Daily buckets retain the current Istanbul day and preceding six days. Weekly buckets retain Monday-based calendar weeks overlapping the latest 30 days; the boundary week includes its full recorded minimum. Monthly buckets are retained indefinitely. The yearly graph displays the current and preceding 11 calendar months; Max displays all active monthly buckets. Unobserved buckets produce gaps, without interpolation. On a product-identity reset, the previous monthly series is preserved in `archived`, while the active graph starts a new series. Ordinary bucket retention still applies.
+
+### Information buttons
+
+`Format Cheapest Response` adds one `price_info:<row_id>` button per displayed product. Ten results use two rows of five buttons, in addition to the pagination row. Labels use the result's displayed rank. Debug listings keep their existing controls. `Parse Interaction` accepts only positive numeric row IDs of at most 15 digits and routes `get_price_graph` to Switch output 8.
+
+`Get Graph Product` reads one row by its built-in Data Table ID. Its normal and error outputs both lead to `Format Graph Info`. The initial information click returns a public Discord response (`type: 4`, no ephemeral flag), containing one weekly graph and a single row of four period buttons. The search message remains available. Each graph has a footer identifying the period minimum and its actual observation day; the PNG repeats this information beneath the plot. Missing or corrupt data produces an explicit message rather than fabricated history.
+
+Period button IDs use `price_graph:<row_id>:<week|month|year|max>`. The parser validates the entire ID, routes it through the same graph lookup, and sets `graphUpdate: true`. `lib/graph-info.js`, embedded in `Format Graph Info`, returns `type: 7` for these clicks, replacing the existing message's single embed and controls. The selected button is highlighted and disabled. Other users can switch the public message's period. Initial `price_info` clicks set `period: week` and `graphUpdate: false`. There is no ephemeral flag on graph replies, including error responses.
+
+### Local PNG endpoint
+
+`Render Price History Chart` (`5fB0T7QMmEKAmkgG`) serves GET `/webhook/price-history-chart?id=<row_id>&period=<week|month|year|max>`. It validates query inputs, reads only the requested row, and generates a 900 × 500 indexed PNG using `lib/chart-png.js`. The image uses a rounded dark card, turquoise line, gradient area fill, muted grid, rounded price-axis bounds, and a separate minimum-price/date panel. The top value is the latest plotted bucket minimum, not an unrecorded current quote. Gaps remain disconnected. No external chart service, API key, or installed image library is required. PNG generation uses lossless stored DEFLATE blocks, Adler-32, and PNG CRCs. Image URLs include `style=3` to avoid reusing images cached before the font update.
+
+`lib/chart-font.js` contains pre-rendered Segoe UI glyph masks for 12, 18, and 28 pixel text, with 16 alpha levels and run-length encoding. The renderer composites glyphs into its indexed palette rather than scaling a pixel font. Turkish uppercase characters are included. The font masks are embedded in the Code node; there is no font installation, browser, network call, or GPU requirement at runtime. `scripts/build-chart-font.ps1` regenerates the masks on Windows using System.Drawing and Segoe UI. Regeneration also requires updating the embedded font asset in the renderer workflow and exporting that workflow. Tests check font and renderer parity with their exported code.
+
+The binary property `chart` passes through the IF node to `Respond Chart PNG`. Valid responses return `image/png` with a five-minute cache header. Invalid inputs receive 400, missing products 404, corrupt history 500, and storage failures 503. The Data Table error output is wired to the error response. The endpoint is public so Discord's image proxy can retrieve public retail price data; it exposes no filter, user, or credential data. Image URLs include a record-update version to refresh after observations change.
+
+The MCP trigger preview incorrectly included a webhook-ID prefix for this static path. Real HTTP verification established the path above. In exports, `YOUR_PRICE_CHART_ENDPOINT` replaces the live endpoint in `Format Graph Info`; set it to the verified URL after import.
+
+### Initialization and verification
+
+`Initialize Price Graph History` (`RaNbbuEp9PU2lr7s`) is a manual-only, idempotent migration. It reads existing rows and initializes only missing graph history from a positive, in-stock current price and its saved `last_checked_at`. Its update node writes only `chart_history`. It does not reconstruct earlier prices, change filters, send Discord alerts, or run on a schedule. Execution `3175` completed successfully.
+
+Execution `3173` verified ten product-information buttons and preserved pagination. `3174` rejected an invalid graph ID. `3178` verified minimum-price observation dates using stored data. `3177` and `3179` verified local PNG generation and binary responses. Production HTTP checks returned valid PNGs for all four periods, 400 for invalid IDs or periods, and 404 for missing rows. After the redesign, `3202` verified a public single-graph response with four buttons; `3203` and `3204` verified in-place monthly and Max updates; `3205` verified the redesigned PNG binary response. The image layout was visually inspected.
+
+Run all four scripts in `tests/` to verify storage minima and dates, retention, missing observations, product-reset archives, notification guards, button routing, error wiring, exported-helper parity, PNG dimensions, and independent DEFLATE decoding. These graph tests use stored observations and synthetic regression fixtures; no fresh retailer scrape or channel/DM alert is triggered by them. The tracker retains its existing credential-configuration warnings; exports replace token values with placeholders.
+
+### Rendering resource measurements
+
+The font update was checked in n8n execution `3218`: `Build Price Chart` took 429 ms, `Get Chart Product` took 6 ms, and the complete manual workflow took approximately 455 ms. These are elapsed execution times, not measurements of server CPU utilization or server RAM.
+
+Local synthetic measurements used Node v24.18.0 on an Intel Core i5-11320H. Across 20 renders per period, median CPU time was approximately 0.35–0.4 seconds per image. Three fresh-process runs showed about 12.8–12.9 MiB additional process RSS, including first-run compilation, about 0.6 MiB JavaScript heap growth, and 2.7 MiB buffer growth. The indexed PNG was approximately 440 KiB. These memory figures overlap and must not be added together. They are local observations after rendering, not n8n-server peak RAM guarantees. Twenty sequential renders temporarily grew RSS by around 55 MiB in one sample because buffers can await garbage collection or remain allocated for reuse.
+
+Reproduce with `node --expose-gc scripts/benchmark-chart.cjs` or `node --expose-gc scripts/benchmark-chart.cjs --single`. The script distinguishes single-process memory changes from a sequential series. The renderer uses CPU only and runs on image requests; hourly scraping updates history without generating PNGs. Discord or HTTP-client caching may avoid some image requests, but the n8n endpoint has no persistent server-side image cache. Concurrency increases CPU demand and temporary memory use. Existing n8n/task-runner overhead, database reads, execution-data retention, and history storage are additional costs; server RAM has not been profiled.
