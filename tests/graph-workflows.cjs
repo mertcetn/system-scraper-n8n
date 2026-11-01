@@ -43,4 +43,4 @@ assert(run(info,[{...realRow,chart_history:'broken'}])[0].json.data.content.incl
 const lookup=slash.nodes.find(n=>n.name==='Get Graph Product');assert.equal(lookup.onError,'continueErrorOutput');
 assert.equal(slash.connections['Get Graph Product'].main[1][0].node,'Format Graph Info');
 assert.equal(renderer.connections['Get Chart Product'].main[1][0].node,'Respond Chart Error');
-console.log('PASS: deployed helper parity, local-only renderer, authentic minima, notification guards, one public graph, four period buttons, in-place updates and dates, missing/corrupt history, wired errors');
+console.log('PASS: deployed helper parity, local fallback renderer, authentic minima, notification guards, one public graph, four period buttons, in-place updates and dates, missing/corrupt history, wired errors');

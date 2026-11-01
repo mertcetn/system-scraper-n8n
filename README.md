@@ -29,9 +29,11 @@ Each `/ara` result has a numbered **Bilgi** button. Click it to open a public gr
 
 Each graph shows the period's lowest price and the day it was observed underneath the plot. Repeated observations retain only the minimum; ties retain the earliest observation date. Dates use Europe/Istanbul, and weeks start on Monday. Missing observations remain gaps.
 
-The chart uses a dark card, a turquoise price line with subtle area shading, antialiased Segoe UI text, and a separate minimum-price/date panel. Only one graph is displayed at a time, and the active period button is highlighted. Font glyphs are embedded, so the n8n server does not need a font installation or a GPU.
+Charts use a turquoise price line. Szum controls its theme appearance; the verified output has a light background, while QuickChart and the local fallback use dark styling. Only one graph is displayed at a time, and the active period button is highlighted. Images use **Szum → QuickChart → local PNG**, in that order. Any failure, including timeouts, quota limits, HTTP errors, or invalid PNGs, moves to the next option. Each external request has an 8-second timeout and no automatic retry. The local fallback uses embedded antialiased Segoe UI glyphs and needs no font installation or GPU.
 
-History starts from actual recorded observations. Existing products can be initialized from their latest saved price and timestamp; earlier prices cannot be reconstructed. Graph PNGs are generated locally in n8n, without an external chart service.
+History starts from actual recorded observations. Existing products can be initialized from their latest saved price and timestamp; earlier prices cannot be reconstructed. External services receive the selected period's public price points and minimum-price/date caption, without Discord user information, filters, or credentials in the payload. Empty history skips both services.
+
+[Szum Free](https://szum.io/chart-image-api) includes 500 renders per month. QuickChart works without an API key; an [official community reply from April 2025](https://community.quickchart.io/t/rate-limits-for-quickchart-free-plan/722) lists 60 images/minute and 1,000/month. These historical QuickChart figures are not a guaranteed allowance. Limits or outages automatically fall through to local rendering.
 
 ## Supported retailers
 
@@ -75,6 +77,7 @@ system-scraper-n8n/
 │   ├── donanim-fiyat-takipcisi.json
 │   ├── discord-slash-komut-yoneticisi.json
 │   ├── render-price-history-chart.json
+│   ├── render-external-price-chart.json
 │   └── initialize-price-graph-history.json
 ├── lib/                  # Shared history and local PNG rendering code
 ├── tests/                # Workflow and graph regression checks
@@ -93,9 +96,12 @@ In n8n, create a workflow and choose **Import from File** for each JSON file in 
 - `donanim-fiyat-takipcisi.json`: scheduled scraping, price comparison, and notifications.
 - `discord-slash-komut-yoneticisi.json`: Discord interactions, filter management, and graph information buttons.
 - `render-price-history-chart.json`: public PNG endpoint used by Discord to display graphs.
+- `render-external-price-chart.json`: reusable Szum/QuickChart renderer called by the public endpoint.
 - `initialize-price-graph-history.json`: optional manual initialization of missing graph history from existing prices. It has no schedule and sends no alerts.
 
 Keep the workflows inactive until configuration and manual checks are complete.
+
+Create an n8n **Bearer Auth** credential named `Szum API`, put your Szum key in its Bearer Token field, and select it on `Render With Szum` in the external renderer. A local `.env` entry named `SZUM_KEY` does not automatically configure n8n credentials. QuickChart requires no credential. In the main renderer's `Render External Chart` node, select the imported external workflow; imported workflow and credential IDs must be rebound. Publish the external renderer first, then the main renderer after manual checks.
 
 ### 2. Create and connect the Data Tables
 
@@ -131,6 +137,7 @@ node tests/search-command.cjs
 node tests/price-graphs.cjs
 node tests/chart-png.cjs
 node tests/graph-workflows.cjs
+node tests/chart-providers.cjs
 ```
 
 To measure local rendering cost, run `node --expose-gc scripts/benchmark-chart.cjs` (20 samples per period) or add `--single` for a fresh-process measurement. These measurements do not include the n8n server's own process, task runner, or database overhead.

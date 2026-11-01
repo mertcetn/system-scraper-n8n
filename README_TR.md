@@ -118,19 +118,23 @@ Discord komut tanımı [discord/ara.command.json](./discord/ara.command.json) do
 
 Her grafiğin altında ilgili dönemin en düşük fiyatı ve görüldüğü gün yazılır. Aynı dönem içindeki diğer fiyatlar saklanmaz. Minimum birden fazla gün görülürse ilk gözlem günü korunur. Tarihler İstanbul saatine göre hesaplanır; haftalar pazartesi başlar. Gözlem olmayan günler boş bırakılır; geçmiş fiyatlar uydurulmaz.
 
-Grafik koyu kart zemini, turkuaz fiyat çizgisi, hafif alan dolgusu, kenar yumuşatmalı Segoe UI fontu ve ayrı minimum fiyat/tarih paneli kullanır. Harf şekilleri gömülüdür; sunucuda font kurulumu veya GPU gerekmez.
+Grafikler turkuaz fiyat çizgisi kullanır. Szum'un doğrulanan çıktısı açık zeminlidir; QuickChart ve yerel çizici koyu tasarımı kullanır. Görseller **Szum → QuickChart → yerel PNG** sırasıyla oluşturulur. Kota aşımı dışında zaman aşımı, bağlantı hatası, HTTP hatası veya geçersiz PNG de sonraki yönteme geçişi tetikler. Her dış istek için 8 saniye zaman aşımı uygulanır; otomatik tekrar yoktur. Yerel yedek çizici gömülü, kenar yumuşatmalı Segoe UI harfleri kullanır; font kurulumu veya GPU gerekmez.
 
 Günlük noktalar son 7 gün, haftalık noktalar son 30 günle kesişen takvim haftaları için tutulur. Yıllık grafik son 12 takvim ayını, Max tüm aylık kayıtları gösterir. Aylık geçmiş süresiz saklanır; büyüyen kataloglarda Data Table kapasitesi izlenmelidir. Ürün kimliği değiştiğinde eski aylık seri arşivlenir ve yeni ürünün grafiğine karıştırılmaz.
 
-Grafikler PNG olarak n8n içinde üretilir; dış grafik servisine veri gönderilmez. Discord'un görselleri alabilmesi için grafik endpoint'i herkese açık fiyat verisini sunar.
+Dış servislere yalnızca seçili dönemin herkese açık fiyat noktaları ve minimum fiyat/tarih metni gönderilir; Discord kullanıcı bilgileri, takip filtreleri veya anahtarlar veri gövdesine eklenmez. Kayıt olmayan dönemlerde API çağrısı atlanır. Discord'un görselleri alabilmesi için grafik endpoint'i herkese açık fiyat verisini sunar.
+
+[Szum ücretsiz planı](https://szum.io/chart-image-api) aylık 500 üretim içerir. QuickChart ücretsiz API'si anahtarsız çalışır. [Nisan 2025 tarihli resmi topluluk yanıtı](https://community.quickchart.io/t/rate-limits-for-quickchart-free-plan/722) dakikada 60, ayda 1.000 görsel belirtir; bu geçmiş rakamlar güncel kota garantisi değildir. Her iki servis de başarısız olursa yerel çizim kullanılır. Her yeni görsel isteğinde sıra yeniden Szum'dan başlar; kalıcı kota önbelleği yoktur.
 
 ### Mevcut Kuruluma Ekleme
 
 1. `price_history` tablosuna string tipinde `chart_history` kolonu ekleyin.
-2. Ana iki workflow'un güncel export'larını ve `render-price-history-chart.json` dosyasını içe aktarın; Data Table bağlantılarını kendi tablolarınıza yönlendirin.
-3. Grafik workflow'unu etkinleştirin. `Format Graph Info` düğümündeki `YOUR_PRICE_CHART_ENDPOINT` yer tutucusunu doğrulanmış üretim adresiyle değiştirin. Statik webhook yolu `/webhook/price-history-chart` şeklindedir.
+2. Ana iki workflow'un güncel export'larını, `render-price-history-chart.json` ve `render-external-price-chart.json` dosyalarını içe aktarın; Data Table bağlantılarını kendi tablolarınıza yönlendirin.
+3. n8n'de `Szum API` isimli **Bearer Auth** credential oluşturup Bearer Token alanına Szum anahtarını girin. Dış çizicinin `Render With Szum` düğümünde bu credential'ı seçin. Yerel `.env` içindeki `SZUM_KEY`, n8n credential'ını otomatik doldurmaz. QuickChart için anahtar gerekmez. Ana çizicideki `Render External Chart` düğümünde içe aktarılan dış çizici workflow'unu seçin; import edilen ID'ler yeniden bağlanmalıdır. Manuel kontrollerden sonra önce dış çiziciyi, ardından ana grafik workflow'unu yayınlayın. `Format Graph Info` düğümündeki `YOUR_PRICE_CHART_ENDPOINT` yer tutucusunu doğrulanmış üretim adresiyle değiştirin. Statik webhook yolu `/webhook/price-history-chart` şeklindedir.
 4. İsteğe bağlı `initialize-price-graph-history.json` workflow'unu manuel çalıştırarak mevcut ürünlerin son gerçek fiyatı ve kontrol zamanını başlangıç kaydı olarak aktarın. Yalnızca boş `chart_history` alanları doldurulur; mevcut fiyat ve filtreler değiştirilmez. Bu workflow zamanlanmaz ve bildirim göndermez.
 
-Testler: `node tests/search-command.cjs`, `node tests/price-graphs.cjs`, `node tests/chart-png.cjs`, `node tests/graph-workflows.cjs`.
+Testler: `node tests/search-command.cjs`, `node tests/price-graphs.cjs`, `node tests/chart-png.cjs`, `node tests/graph-workflows.cjs`, `node tests/chart-providers.cjs`.
+
+Aşağıdaki kaynak ölçümleri yerel yedek çiziciye aittir. Dış servis başarılı olduğunda görseli servis çizer; n8n veri hazırlama, indirme ve PNG doğrulamasını yapar. İki servisin de zaman aşımına uğraması yerel çizime geçişi yaklaşık 16 saniye, ek workflow süresi kadar geciktirebilir.
 
 Kaynak kullanımını yerelde ölçmek için `node --expose-gc scripts/benchmark-chart.cjs` komutunu çalıştırın; tek yeni süreç ölçümü için `--single` ekleyin. Bu ölçüm n8n sunucusunun, task runner'ın veya veritabanının toplam bellek maliyeti değildir. Görsel üretimi grafik istendiğinde çalışır; saatlik taramada görsel üretilmez. Ölçüm ayrıntıları [IMPLEMENTATION.md](./IMPLEMENTATION.md) dosyasındadır.

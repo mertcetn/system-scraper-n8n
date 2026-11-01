@@ -1,0 +1,368 @@
+{
+  "id": "fMLplWUahgHfnj3M",
+  "name": "Render External Price Chart",
+  "active": true,
+  "isArchived": false,
+  "versionId": "1e21b343-0baf-4ef8-aafd-426b9cd5d69d",
+  "activeVersionId": "1e21b343-0baf-4ef8-aafd-426b9cd5d69d",
+  "triggerCount": 0,
+  "createdAt": "2026-11-01T13:01:44.120Z",
+  "updatedAt": "2026-11-01T13:07:10.299Z",
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "connections": {
+    "Chart Provider Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Provider Payloads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Provider Payloads": {
+      "main": [
+        [
+          {
+            "node": "Has Price Observations?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Price Observations?": {
+      "main": [
+        [
+          {
+            "node": "Render With Szum",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Provider Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render With Szum": {
+      "main": [
+        [
+          {
+            "node": "Validate Szum PNG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Szum PNG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Szum PNG": {
+      "main": [
+        [
+          {
+            "node": "Szum PNG Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Szum PNG Valid?": {
+      "main": [
+        [
+          {
+            "node": "Return Provider Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Render With QuickChart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render With QuickChart": {
+      "main": [
+        [
+          {
+            "node": "Validate QuickChart PNG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate QuickChart PNG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate QuickChart PNG": {
+      "main": [
+        [
+          {
+            "node": "Return Provider Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodes": [
+    {
+      "id": "85dddf10-0e47-4a0d-ba32-9583623c6900",
+      "name": "Chart Provider Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        80
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "chart_history",
+              "type": "string"
+            },
+            {
+              "name": "period",
+              "type": "string"
+            },
+            {
+              "name": "timestamp",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2351d2c5-489b-46d9-9a3e-109acf1d4b4f",
+      "name": "Prepare Provider Payloads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        80
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const GRAPH_DAY = 86400000;\nfunction graphLocalDay(value) {\n  const time = new Date(value).getTime();\n  if (!Number.isFinite(time)) throw new Error('Invalid graph observation timestamp');\n  return new Date(time + 3 * 3600000).toISOString().slice(0, 10);\n}\nfunction graphWeek(day) {\n  const date = new Date(day + 'T00:00:00Z');\n  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);\n  return date.toISOString().slice(0, 10);\n}\nfunction graphDayShift(day, amount) {\n  return new Date(new Date(day + 'T00:00:00Z').getTime() + amount * GRAPH_DAY).toISOString().slice(0, 10);\n}\nfunction readGraphHistory(raw) {\n  if (!raw) return {version: 1, daily: [], weekly: [], monthly: []};\n  const history = typeof raw === 'string' ? JSON.parse(raw) : raw;\n  if (history.version !== 1 || !['daily', 'weekly', 'monthly'].every(key => Array.isArray(history[key]))) {\n    throw new Error('Invalid stored chart_history');\n  }\n  for (const key of ['daily', 'weekly', 'monthly']) {\n    for (const point of history[key]) {\n      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(point.day) || !Number.isFinite(point.price) || point.price <= 0 || !Number.isFinite(Date.parse(point.observed_at))) {\n        throw new Error('Invalid stored price point');\n      }\n    }\n  }\n  return JSON.parse(JSON.stringify(history));\n}\nfunction addGraphObservation(raw, product, timestamp, reset = false) {\n  const previous = readGraphHistory(raw);\n  const history = reset ? readGraphHistory(null) : previous;\n  if (reset && previous.monthly.length) {\n    history.archived = [...(previous.archived || []), {monthly: previous.monthly}];\n  }\n  const day = graphLocalDay(timestamp);\n  const week = graphWeek(day);\n  const month = day.slice(0, 7) + '-01';\n  history.daily = history.daily.filter(point => point.day >= graphDayShift(day, -6));\n  history.weekly = history.weekly.filter(point => point.day >= graphWeek(graphDayShift(day, -30)));\n  const price = Number(product.current_price);\n  if (product.in_stock === true && Number.isFinite(price) && price > 0) {\n    for (const [key, bucket] of [['daily', day], ['weekly', week], ['monthly', month]]) {\n      const existing = history[key].find(point => point.day === bucket);\n      const rounded = Math.round(price * 100) / 100;\n      if (existing && (rounded < existing.price || (rounded === existing.price && timestamp < existing.observed_at))) {\n        existing.price = rounded;\n        existing.observed_at = timestamp;\n      } else if (!existing) history[key].push({day: bucket, price: rounded, observed_at: timestamp});\n      history[key].sort((a, b) => a.day.localeCompare(b.day));\n    }\n  }\n  return JSON.stringify(history);\n}\nfunction graphSeries(raw, period, timestamp) {\n  const history = readGraphHistory(raw);\n  const today = graphLocalDay(timestamp);\n  let buckets;\n  let points;\n  if (period === 'week') {\n    buckets = Array.from({length: 7}, (_, i) => graphDayShift(today, i - 6));\n    points = history.daily;\n  } else if (period === 'month') {\n    const start = graphWeek(graphDayShift(today, -30));\n    buckets = [];\n    for (let day = start; day <= today; day = graphDayShift(day, 7)) buckets.push(day);\n    points = history.weekly;\n  } else if (period === 'year' || period === 'max') {\n    const first = period === 'year'\n      ? new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 12, 1)).toISOString().slice(0, 10)\n      : (history.monthly[0]?.day || today.slice(0, 7) + '-01');\n    buckets = [];\n    for (let day = first; day <= today;) {\n      buckets.push(day);\n      const date = new Date(day + 'T00:00:00Z');\n      date.setUTCMonth(date.getUTCMonth() + 1);\n      day = date.toISOString().slice(0, 10);\n    }\n    points = history.monthly;\n  } else throw new Error('Invalid graph period');\n  const byDay = new Map(points.map(point => [point.day, point.price]));\n  const included = points.filter(point => buckets.includes(point.day));\n  const minimum = included.slice().sort((a, b) => a.price - b.price || a.observed_at.localeCompare(b.observed_at))[0] || null;\n  return {labels: buckets.map(day => period === 'week' || period === 'month' ? day : day.slice(0, 7)), values: buckets.map(day => byDay.get(day) ?? null), minimum};\n}\nfunction priceChartConfig(raw, period, timestamp) {\n  const series = graphSeries(raw, period, timestamp);\n  const titles = {week: '1 Hafta · Günlük En Düşük Fiyat', month: '1 Ay · Haftalık En Düşük Fiyat', year: '1 Yıl · Aylık En Düşük Fiyat', max: 'Max · Aylık En Düşük Fiyat'};\n  const caption = series.minimum ? 'En düşük: ' + series.minimum.price.toLocaleString('tr-TR') + ' TL · ' + graphLocalDay(series.minimum.observed_at) : 'Bu dönem için kayıtlı fiyat yok';\n  return {type: 'line', data: {labels: series.labels, datasets: [{label: 'En düşük fiyat (TL)', data: series.values, borderColor: '#4f8cff', backgroundColor: '#4f8cff', fill: false, tension: 0, spanGaps: false, pointRadius: 4}]}, options: {plugins: {title: {display: true, text: titles[period]}, subtitle: {display: true, position: 'bottom', text: caption, padding: 12}, legend: {display: false}}, scales: {y: {beginAtZero: false, title: {display: true, text: 'TL'}}}}};\n}\n\n\r\n\nfunction externalChartPayloads(raw,period,timestamp) {\n  const series=graphSeries(raw,period,timestamp);\n  const titles={week:'1 Hafta · Günlük Minimum Fiyat',month:'1 Ay · Haftalık Minimum Fiyat',year:'1 Yıl · Aylık Minimum Fiyat',max:'Max · Aylık Minimum Fiyat'};\n  const minimum=series.minimum;\n  const caption=minimum?'En düşük: '+minimum.price.toLocaleString('tr-TR')+' TL · Görüldüğü gün: '+graphLocalDay(minimum.observed_at):'Bu dönem için kayıtlı fiyat yok';\n  const segments=[];let segment=[];\n  series.values.forEach((price,i)=>{\n    if(price===null){if(segment.length)segments.push(segment);segment=[];return;}\n    segment.push({x:series.labels[i].length===7?series.labels[i]+'-01':series.labels[i],y:price});\n  });\n  if(segment.length)segments.push(segment);\n  const points=segments.flat();\n  if(!points.length)return {ready:false,reason:'no_observations'};\n  const start=series.labels[0].length===7?series.labels[0]+'-01':series.labels[0];\n  let end=series.labels.at(-1).length===7?series.labels.at(-1)+'-01':series.labels.at(-1);\n  if(start===end)end=graphDayShift(end,1);\n  const values=points.map(point=>point.y),low=Math.min(...values),high=Math.max(...values);\n  const padding=Math.max((high-low)*0.12,high*0.015,1);\n  const szum={version:'2026-09-26',config:{version:'2026-09-26',type:'line',theme:'noir',locale:'tr-TR',title:titles[period],caption,\n    category:{field:'x',scale:{type:'utc',domain:[start,end]}},\n    values:{type:'long',field:'y',series:{field:'segment'},scale:{type:'linear',domain:[Math.max(0,low-padding),high+padding]}},\n    color:'#42d1bf',curve:'linear',points:{radius:4},valueAxis:{title:'TL'}},\n    data:segments.flatMap((data,i)=>data.map(point=>({...point,segment:String(i)}))),size:{type:'canvas',width:900,height:500},output:{format:'png',scale:1}};\n  const quickchart={version:'4',format:'png',width:900,height:500,devicePixelRatio:1,backgroundColor:'#121c2c',chart:{\n    type:'line',data:{labels:series.labels,datasets:[{label:'Minimum fiyat (TL)',data:series.values,borderColor:'#42d1bf',backgroundColor:'rgba(66,209,191,0.12)',fill:true,spanGaps:false,tension:0,pointRadius:4,borderWidth:2}]},\n    options:{layout:{padding:20},plugins:{legend:{display:false},title:{display:true,text:titles[period],color:'#ecf4ff',font:{size:22}},subtitle:{display:true,position:'bottom',text:caption,color:'#87e2a6',font:{size:14},padding:18}},\n      scales:{x:{ticks:{color:'#899db4',maxTicksLimit:8},grid:{color:'#253345'}},y:{beginAtZero:false,ticks:{color:'#899db4'},grid:{color:'#253345'},title:{display:true,text:'TL',color:'#899db4'}}}}}};\n  return {ready:true,szum,quickchart};\n}\n\nconst input=$input.first().json;\nreturn [{json:externalChartPayloads(input.chart_history,input.period,input.timestamp)}];"
+      },
+      "notes": "Why Code: custom provider payloads and PNG chunk/CRC validation are not supported by native transformations."
+    },
+    {
+      "id": "0f502622-9371-449d-8ca0-7427e9c42870",
+      "name": "Has Price Observations?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        80
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ready }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "4e6b8977-05d0-4dc6-8c34-487afdcbf024",
+      "name": "Render With Szum",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://szum.io/chart",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Prepare Provider Payloads').first().json.szum) }}",
+        "options": {
+          "timeout": 8000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "chart",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "notes": "Why HTTP: Szum has no native n8n node. Bearer credentials stay in n8n; any failure falls back.",
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mjr0zAKZIAafPQhQ",
+          "name": "Szum API"
+        }
+      }
+    },
+    {
+      "id": "7f098e4e-d0e7-45db-bf25-0afed8e5662d",
+      "name": "Return Provider Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        80
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const item=$input.first();\nconst ok=item.json.ok===true;\nreturn [{json:{ok,provider:ok?item.json.provider:null,reason:ok?null:(item.json.reason||'no_provider'),status:item.json.status||null},...(ok&&item.binary?.chart?{binary:{chart:item.binary.chart}}:{})}];"
+      },
+      "notes": "Why Code: custom provider payloads and PNG chunk/CRC validation are not supported by native transformations."
+    },
+    {
+      "id": "8c16d2c6-d759-42ce-b784-814f221eecc2",
+      "name": "Validate Szum PNG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "function validateProviderPng(buffer,status,headers={}) {\n  if(!Number.isInteger(status)||status<200||status>=300)return {ok:false,reason:'http_status'};\n  const normalized=Object.fromEntries(Object.entries(headers).map(([key,value])=>[key.toLowerCase(),value]));\n  if(normalized['x-quickchart-error'])return {ok:false,reason:'provider_error'};\n  if(!String(normalized['content-type']||'').toLowerCase().startsWith('image/png'))return {ok:false,reason:'content_type'};\n  const signature=[137,80,78,71,13,10,26,10];\n  if(!buffer||buffer.length<57||!signature.every((value,i)=>buffer[i]===value))return {ok:false,reason:'png_signature'};\n  let offset=8,hasHeader=false,hasData=false,hasEnd=false;\n  while(offset+12<=buffer.length){\n    const length=buffer.readUInt32BE(offset);\n    if(length>buffer.length-offset-12)return {ok:false,reason:'png_truncated'};\n    const type=buffer.toString('ascii',offset+4,offset+8);\n    let crc=0xffffffff;\n    for(let i=offset+4;i<offset+8+length;i++){crc^=buffer[i];for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}\n    if(((crc^0xffffffff)>>>0)!==buffer.readUInt32BE(offset+8+length))return {ok:false,reason:'png_crc'};\n    if(!hasHeader){\n      if(type!=='IHDR'||length!==13||buffer.readUInt32BE(offset+8)!==900||buffer.readUInt32BE(offset+12)!==500)return {ok:false,reason:'png_dimensions'};\n      hasHeader=true;\n    }\n    if(type==='IDAT'&&length>0)hasData=true;\n    offset+=length+12;\n    if(type==='IEND'){if(length!==0)return {ok:false,reason:'png_end'};hasEnd=true;break;}\n  }\n  return hasHeader&&hasData&&hasEnd&&offset===buffer.length?{ok:true}:{ok:false,reason:'png_structure'};\n}\n\n\r\n\nconst item=$input.first();\nconst provider=\"szum\";\nconst status=Number(item.json.statusCode||0);\nconst failed=reason=>[{json:{ok:false,provider,reason,status:status||null}}];\nif(item.json.error||!item.binary?.chart)return failed('transport_or_missing_image');\ntry {\n const bytes=await this.helpers.getBinaryDataBuffer(0,'chart');\n const checked=validateProviderPng(bytes,status,item.json.headers||{});\n if(!checked.ok)return failed(checked.reason);\n return [{json:{ok:true,provider},binary:{chart:item.binary.chart}}];\n} catch(error){return failed('invalid_image');}"
+      },
+      "notes": "Why Code: custom provider payloads and PNG chunk/CRC validation are not supported by native transformations."
+    },
+    {
+      "id": "171d3476-df7e-4a76-a03c-b55cf800d9ef",
+      "name": "Szum PNG Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "157b2056-07a7-44a6-a42c-49c042797a27",
+      "name": "Render With QuickChart",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Prepare Provider Payloads').first().json.quickchart) }}",
+        "options": {
+          "timeout": 8000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "chart",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "notes": "Why HTTP: native QuickChart lacks footer/scales options, full-response error-header validation and timeout controls.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "c8078164-8bac-41d1-a0a9-732d728e1a08",
+      "name": "Validate QuickChart PNG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        80
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "function validateProviderPng(buffer,status,headers={}) {\n  if(!Number.isInteger(status)||status<200||status>=300)return {ok:false,reason:'http_status'};\n  const normalized=Object.fromEntries(Object.entries(headers).map(([key,value])=>[key.toLowerCase(),value]));\n  if(normalized['x-quickchart-error'])return {ok:false,reason:'provider_error'};\n  if(!String(normalized['content-type']||'').toLowerCase().startsWith('image/png'))return {ok:false,reason:'content_type'};\n  const signature=[137,80,78,71,13,10,26,10];\n  if(!buffer||buffer.length<57||!signature.every((value,i)=>buffer[i]===value))return {ok:false,reason:'png_signature'};\n  let offset=8,hasHeader=false,hasData=false,hasEnd=false;\n  while(offset+12<=buffer.length){\n    const length=buffer.readUInt32BE(offset);\n    if(length>buffer.length-offset-12)return {ok:false,reason:'png_truncated'};\n    const type=buffer.toString('ascii',offset+4,offset+8);\n    let crc=0xffffffff;\n    for(let i=offset+4;i<offset+8+length;i++){crc^=buffer[i];for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}\n    if(((crc^0xffffffff)>>>0)!==buffer.readUInt32BE(offset+8+length))return {ok:false,reason:'png_crc'};\n    if(!hasHeader){\n      if(type!=='IHDR'||length!==13||buffer.readUInt32BE(offset+8)!==900||buffer.readUInt32BE(offset+12)!==500)return {ok:false,reason:'png_dimensions'};\n      hasHeader=true;\n    }\n    if(type==='IDAT'&&length>0)hasData=true;\n    offset+=length+12;\n    if(type==='IEND'){if(length!==0)return {ok:false,reason:'png_end'};hasEnd=true;break;}\n  }\n  return hasHeader&&hasData&&hasEnd&&offset===buffer.length?{ok:true}:{ok:false,reason:'png_structure'};\n}\n\n\r\n\nconst item=$input.first();\nconst provider=\"quickchart\";\nconst status=Number(item.json.statusCode||0);\nconst failed=reason=>[{json:{ok:false,provider,reason,status:status||null}}];\nif(item.json.error||!item.binary?.chart)return failed('transport_or_missing_image');\ntry {\n const bytes=await this.helpers.getBinaryDataBuffer(0,'chart');\n const checked=validateProviderPng(bytes,status,item.json.headers||{});\n if(!checked.ok)return failed(checked.reason);\n return [{json:{ok:true,provider},binary:{chart:item.binary.chart}}];\n} catch(error){return failed('invalid_image');}"
+      },
+      "notes": "Why Code: custom provider payloads and PNG chunk/CRC validation are not supported by native transformations."
+    }
+  ],
+  "nodeGroups": [],
+  "tags": [],
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "parentFolderId": null,
+  "description": "Typed input: chart_history string, period string, timestamp string. Try Szum then QuickChart; verify PNG status/header/chunks/CRC. Return ok/provider plus binary chart, or ok:false for local fallback. Never exposes credentials."
+}
