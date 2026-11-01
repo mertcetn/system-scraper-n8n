@@ -39,10 +39,16 @@ Command names and option names remain in Turkish.
 | `/filtre-listele` | List active tracking filters. |
 | `/filtre-sil` | Delete a filter by ID. |
 | `/esik-guncelle` | Change a filter's price-drop threshold. |
-| `/en-ucuz` | List in-stock systems by ascending price, with optional model and retailer filters. |
+| `/ara` | Search in-stock systems with optional `model`, `site`, and `siralama` fields. Choose **En ucuz** (lowest first, default) or **En pahalı** (highest first). |
 | `/debug` | Configure scan reports for a channel. Enable `verbose` to include product listings. |
 
-The cheapest-system and verbose debug lists support button navigation with 10 products per page.
+Search results and verbose debug lists support button navigation with 10 products per page. Search pagination preserves the model, retailer, and sorting choice. Long display names are shortened while product links are retained.
+
+Examples: `/ara model:5060` or `/ara model:5060 siralama:En pahalı`.
+
+The Discord command definition is stored in [discord/ara.command.json](./discord/ara.command.json). Its optional `siralama` choices use `en_ucuz` and `en_pahali` as API values. When importing into another deployment, register this command with your Discord application as well.
+
+Run `node tests/search-command.cjs` to verify search behavior against the exported workflow.
 
 ## Repository layout
 

@@ -1,0 +1,62 @@
+{
+  "name": "ara",
+  "description": "Stoktaki hazır sistemleri model ve siteye göre ara, fiyata göre sırala.",
+  "options": [
+    {
+      "type": 3,
+      "name": "model",
+      "description": "Aranacak model veya bileşen (örn: 5060 veya 5060, 7500f)"
+    },
+    {
+      "type": 3,
+      "name": "site",
+      "description": "Filtrelenecek site",
+      "choices": [
+        {
+          "name": "Tüm Siteler",
+          "value": "all"
+        },
+        {
+          "name": "Gaming.gen.tr",
+          "value": "gaming_gen_tr"
+        },
+        {
+          "name": "GameGaraj",
+          "value": "gamegaraj"
+        },
+        {
+          "name": "İtopya",
+          "value": "itopya"
+        },
+        {
+          "name": "PcKolik",
+          "value": "pckolik"
+        },
+        {
+          "name": "Vatan Bilgisayar",
+          "value": "vatan"
+        },
+        {
+          "name": "MediaMarkt",
+          "value": "mediamarkt"
+        }
+      ]
+    },
+    {
+      "type": 3,
+      "name": "siralama",
+      "description": "Fiyat sıralaması (varsayılan: en ucuz)",
+      "required": false,
+      "choices": [
+        {
+          "name": "En ucuz",
+          "value": "en_ucuz"
+        },
+        {
+          "name": "En pahalı",
+          "value": "en_pahali"
+        }
+      ]
+    }
+  ]
+}

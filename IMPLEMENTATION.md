@@ -64,7 +64,7 @@ Original workflow ID: `jy2o6YTyzSqg4Amh`
 | `/filtre-sil` | Deletes the specified filter ID from `tracking_filters`. |
 | `/filtre-listele` | Lists active filters as Discord embeds. |
 | `/esik-guncelle` | Updates the price-drop threshold. |
-| `/en-ucuz` | Lists in-stock systems by ascending price, with 10 results per page. Button IDs use `enc_p:page:site:model`. |
+| `/ara` | Searches in-stock systems using optional `model`, `site`, and `siralama`. Sorting choices are En ucuz (`en_ucuz`, default) and En pahalı (`en_pahali`). Results have 10 items per page. |
 | `/debug` | Configures the debug channel and verbose product listing. |
 
 Command and option identifiers remain in Turkish for compatibility.
@@ -174,3 +174,15 @@ The previous report recorded approximately 26 seconds per scan and a 0% false-no
 ## Change management
 
 Review recent Git history at the start of every chat. Keep the English and Turkish READMEs and this technical reference current when behavior changes. Before committing any changes made in n8n, export the affected workflows to `./workflows/` and verify that no secrets are included. Follow the user-feedback and commit rules in [AGENTS.md](./AGENTS.md).
+
+## Search command state and verification
+
+The Discord registration payload is stored in `discord/ara.command.json`. The existing command registration was renamed from `/en-ucuz` to `/ara`; model and retailer options are retained. Updating the workflow alone does not update the Discord registration.
+
+`Parse Interaction` maps `siralama` to the internal `sort` field. Missing or unrecognized values default to `en_ucuz`. `Format Cheapest Response` sorts numerically before pagination and sets the result title for ascending or descending order. Product display names are shortened according to URL length to keep typical ten-item responses within the Discord embed description limit.
+
+New search buttons use `ara_p:page:site:sort:model`, preserving filters and order in both directions. Existing `enc_p:page:site:model` buttons remain supported with ascending order. Debug buttons retain `dbg_p:page` and ascending order. Internal node names and the `get_cheapest` routing action are retained.
+
+Run `node tests/search-command.cjs` to check ascending and descending results, default and invalid sorting, model boundaries, retailer filtering, out-of-stock exclusion, next/previous navigation, legacy buttons, empty results, and debug routing.
+
+Manual n8n executions: `3168` verified descending results against stored price history; `3169` verified the default order with model 5060 and PcKolik (56 matches); `3170` verified descending page-two navigation; `3171` verified shortened product names (3,483-character description). These tests read existing data and return webhook responses; they do not perform a fresh retailer scrape or send channel/DM alerts.

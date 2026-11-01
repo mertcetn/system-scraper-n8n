@@ -26,7 +26,7 @@ Bu proje, Türkiye'nin önde gelen hazır sistem ve donanım sitelerindeki ürü
 -  **Sahte İndirim Koruması (Anti-False Drop Baseline):** Ürünün adı veya yapısı tamamen değiştiğinde bunu indirim değil yeniden eşleşme sayarak hatalı bildirim gönderilmesini önleyen güvenlik mekanizması.
 -  **Stok Durumu Takibi:** Tükendi / Stokta Yok durumundaki ürünler indirim sayılmaz ve bildirim üretmez.
 -  **Kanal veya DM Bildirimi:** Kullanıcı dilerse bildirimi ortak bir kanala almak yerine doğrudan Discord DM'ine alabilir.
--  **10'ar 10'ar Sayfalı Gezinti:** `/en-ucuz` ve `/debug` komutlarında Discord butonlarıyla sayfalar arasında gezinebilme (` Önceki`, `Sonraki `).
+- **10'ar 10'ar Sayfalı Gezinti:** `/ara` ve `/debug` komutlarında Discord butonlarıyla sayfalar arasında gezinebilme; aramada filtreler ve sıralama korunur.
 
 ---
 
@@ -40,7 +40,7 @@ Bot üzerindeki slash komutları dinamik olarak çalışır:
 | `/filtre-listele` | Kayıtlı tüm aktif takip filtrelerini listeler. |
 | `/filtre-sil` | Belirtilen ID'ye sahip takip filtresini siler. |
 | `/esik-guncelle` | Filtrenin indirim tetikleme yüzdesini günceller (Örn: %5'ten %10'a). |
-| `/en-ucuz` | Stokta olan en ucuz hazır sistemleri listeler. Model ve site filtresi alabilir; 10'ar adetlik sayfalar halinde butonlarla gezilebilir. |
+| `/ara` | Stoktaki hazır sistemleri arar. Opsiyonel `model`, `site` ve `siralama` alanlarını alır. Sıralama seçenekleri: **En ucuz** (varsayılan) ve **En pahalı**. Sayfalar arasında filtreler ve sıralama korunur. |
 | `/debug` | Sitelerin taranma başarı durumlarını ve taranan sistem sayılarını belirtilen kanala raporlar. `verbose: true` seçilirse tüm taranan sistemler 10'ar 10'ar butonlu sayfalarla listelenir. |
 
 ---
@@ -97,3 +97,10 @@ Export dosyalarında aşağıdaki yer tutucular bulunur. Gerçek bot tokenını 
 Tablo şemaları ve mimari için [IMPLEMENTATION.md](./IMPLEMENTATION.md), katkı kuralları için [AGENTS.md](./AGENTS.md) dosyasına bakın. İçe aktarma sonrası Data Table düğümlerinde kendi tablolarınızı seçin. Slash komutlarını Discord uygulamasına kaydedip Interactions Endpoint URL alanını webhook adresiyle yapılandırın; saatlik zamanlamayı açmadan önce manuel test yapın.
 
 Yukarıdaki ürün sayıları geçmiş taramalara ait yaklaşık değerlerdir ve güncel kapsam garantisi değildir. n8n workflow değişikliklerini commit öncesinde workflows/ dizinine export edin ve gizli bilgi kontrolü yapın.
+
+## Arama Örnekleri
+
+- `/ara model:5060`: eşleşen stoktaki sistemleri en ucuzdan başlayarak listeler.
+- `/ara model:5060 siralama:En pahalı`: eşleşen sistemleri en pahalıdan başlayarak listeler.
+
+Discord komut tanımı [discord/ara.command.json](./discord/ara.command.json) dosyasındadır. `siralama` alanının API değerleri `en_ucuz` ve `en_pahali` olarak tanımlıdır. Başka bir kurulumda workflow ile birlikte Discord komut kaydı da güncellenmelidir. Uzun ürün adları listede kısaltılır; ürün bağlantıları korunur. Arama testleri: `node tests/search-command.cjs`.
