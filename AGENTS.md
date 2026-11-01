@@ -40,6 +40,8 @@ Bu sitelerin genel bir açık API'si bulunmamaktadır; veri sitelerin gömülü 
 4. **Hatalarda Sessiz Kalma:** Sayfa yapısı değişir ve parse bozulursa (0 ürün çekilmesi vb.) durumu gizleme; debug bildirimleri ve hata yolları ile durumu görünür kıl.
 5. **Stok ve İndirim Dürüstlüğü:** Stokta olmayan (`in_stock: false`) bir ürün indirim sayılmaz. Gerçek bir fiyat düşüşü yoksa sahte bildirim üretilemez.
 6. **Canlı Workflow Değişiklikleri:** Canlı workflow'lara dokunurken dikkatli ol, test ortamında veya manual execution ile doğrula. Kullanıcının filtre ve fiyat geçmişini sormadan silme.
+7. **Dokümantasyon Güncelliği (Zorunlu):** Sisteme yeni bir özellik, komut, site, parametre veya veri modeli eklendiğinde; ilgili dokümantasyon dosyalarında (`README.md`, `IMPLEMENTATION.md`) bu yenilik eksikse veya güncel değilse mutlaka güncellenmelidir. Eksik dokümantasyonlu geliştirme tamamlanmış sayılmaz.
+8. **Commit Öncesi Kullanıcı Feedback'i:** Yapılan kod, workflow veya dokümantasyon değişiklikleri için Git commit'i atılmadan önce kullanıcıya yapılan değişiklikler açıklanmalı ve kullanıcının geri bildirimi / onayı beklenmelidir. Kullanıcıdan onay veya feedback alınmadan commit atılamaz.
 
 ---
 
@@ -49,4 +51,5 @@ Bu sitelerin genel bir açık API'si bulunmamaktadır; veri sitelerin gömülü 
 2. Filtreler olumlu ve olumsuz örneklerle test edildi (örn: `"5060"` eşleşir, `"5060 Ti"` eşleşmez).
 3. Hatalı veya değişen ürünlerde sahte indirim üretilmediği doğrulandı.
 4. Dosyalarda ve export edilen workflow'larda hiçbir gizli bilgi kalmadı.
-5. Yapılan değişiklikler [IMPLEMENTATION.md](./IMPLEMENTATION.md) dosyasına işlendi.
+5. Eklenen yeni özellikler ve mimari değişiklikler [IMPLEMENTATION.md](./IMPLEMENTATION.md) ve [README.md](./README.md) dosyalarına işlendi.
+6. Değişiklikler kullanıcıya sunuldu ve commit öncesinde kullanıcının feedback'i / onayı alındı.
