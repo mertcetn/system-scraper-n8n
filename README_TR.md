@@ -100,6 +100,8 @@ Yukarıdaki ürün sayıları geçmiş taramalara ait yaklaşık değerlerdir ve
 
 ## Arama Örnekleri
 
+`/ara` varsayılan olarak yalnızca son **72 saat** içinde görülen sistemleri gösterir; tam 72 saatlik kayıt dahildir. Son görülme zamanı `last_checked_at` alanından alınır. Opsiyonel **`eskiler:true`** alanı eski kayıtları da dahil eder: `/ara model:5060 eskiler:true`. Tarihi eksik veya geçersiz kayıtlar da yalnızca bu seçenekle görünür. Stok, model, site ve sıralama kuralları uygulanmaya devam eder. Sayfalama bu seçimi korur. Bu filtre kayıtları veya fiyat geçmişini silmez; debug raporlarının davranışı değişmez.
+
 - `/ara model:5060`: eşleşen stoktaki sistemleri en ucuzdan başlayarak listeler.
 - `/ara model:5060 siralama:En pahalı`: eşleşen sistemleri en pahalıdan başlayarak listeler.
 

@@ -63,7 +63,9 @@ Command names and option names remain in Turkish.
 
 Search results and verbose debug lists support button navigation with 10 products per page. Search pagination preserves the model, retailer, and sorting choice. Long display names are shortened while product links are retained.
 
-Examples: `/ara model:5060` or `/ara model:5060 siralama:En pahalı`.
+Examples: `/ara model:5060`, `/ara model:5060 siralama:En pahalı`, or `/ara model:5060 eskiler:true`.
+
+By default, `/ara` shows only systems observed within the last **72 hours**, based on `last_checked_at`; exactly 72 hours is included. Set the optional boolean **`eskiler:true`** to include older records as well. Missing or invalid observation timestamps are hidden by default and included with this option. Stock, model, retailer, and sorting rules still apply. Pagination preserves this choice, and stored products/history are never deleted by this filter. Debug reports keep their existing behavior.
 
 The Discord command definition is stored in [discord/ara.command.json](./discord/ara.command.json). Its optional `siralama` choices use `en_ucuz` and `en_pahali` as API values. When importing into another deployment, register this command with your Discord application as well.
 

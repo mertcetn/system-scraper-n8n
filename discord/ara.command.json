@@ -57,6 +57,12 @@
           "value": "en_pahali"
         }
       ]
+    },
+    {
+      "type": 5,
+      "name": "eskiler",
+      "description": "3 günden eski kayıtları da göster (varsayılan: hayır)",
+      "required": false
     }
   ]
 }
